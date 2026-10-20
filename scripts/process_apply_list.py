@@ -41,12 +41,24 @@ def has_whitespace_issue(value) -> bool:
 
 
 def load_refund_course_names(path: str) -> set[str]:
-    if path.lower().endswith(".csv"):
-        df = pd.read_csv(path, header=None)
+    is_csv = path.lower().endswith(".csv")
+
+    # 1) 헤더에 "과정명"이 들어간 칸이 있으면 그 칸만 사용한다.
+    #    (과정 상세정보가 함께 들어있는 표라도 과정명만 정확히 뽑아내기 위함)
+    df_with_header = pd.read_csv(path) if is_csv else pd.read_excel(path)
+    course_column = next(
+        (col for col in df_with_header.columns if isinstance(col, str) and "과정명" in col),
+        None,
+    )
+    if course_column is not None:
+        values = df_with_header[course_column]
     else:
-        df = pd.read_excel(path, header=None)
+        # 2) 헤더가 없는 단순 과정명 목록으로 보고, 모든 칸을 과정명 후보로 취급한다.
+        df_flat = pd.read_csv(path, header=None) if is_csv else pd.read_excel(path, header=None)
+        values = df_flat.values.flatten()
+
     names = set()
-    for value in df.values.flatten():
+    for value in values:
         if pd.isna(value):
             continue
         text = re.sub(r"\s+", " ", str(value)).strip()
