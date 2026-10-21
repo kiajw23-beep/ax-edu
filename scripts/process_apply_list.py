@@ -113,7 +113,7 @@ def main():
         print(str(e))
         sys.exit(1)
 
-    print(f"완료: 총 {result['total']}건 (프리패스/테스트 {result['excluded']}건 제외) / "
+    print(f"완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건 제외) / "
           f"환급 {result['refund']}건 / 비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
     print(f"결과 파일: {result['output_path']}")
 

@@ -6,7 +6,7 @@ process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
 - 과정명이 환급과정 커리큘럼에 있으면 "환급"(과정유형: 사업주).
 - 없고 비환급 가격표에만 있으면 "비환급"(과정유형: 일반).
 - 양쪽에 모두 있으면 "환급"으로 표기하고 금액도 환급 쪽 금액을 쓴다. 이 경우
-  "일반→환급 전환" 메모를 남긴다.
+  "일반 -> 환급" 메모를 남긴다.
 - 비환급 과정은 정부지원금이 없으므로 기업부담금 = 수강료 전액.
 - 어느 쪽에서도 과정명을 찾지 못하면 금액을 비우고 확인필요로만 표시한다
   (추측해서 채우지 않는다).
@@ -38,9 +38,12 @@ EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
 
 def is_excluded_row(row) -> bool:
     """출처에 '프리패스'라는 단어가 들어있거나, 아이디/회사명에 '테스트'/'test'가
-    들어간 신청 건이면 True."""
+    들어갔거나, 신청과정명에 '카드결제'(띄어쓰기 무관)가 들어간 신청 건이면 True."""
     source = normalize(row.get("출처", ""))
     if "프리패스" in source:
+        return True
+    course_no_space = re.sub(r"\s+", "", str(row.get("신청과정명", "")))
+    if "카드결제" in course_no_space:
         return True
     id_text = str(row.get("아이디", "")).lower()
     company_text = str(row.get("회사명", "")).lower()
@@ -51,7 +54,8 @@ def is_excluded_row(row) -> bool:
 
 
 def filter_excluded_rows(df: pd.DataFrame):
-    """출처='프리패스' 건, 아이디/회사명에 테스트 흔적이 있는 건을 제외한다.
+    """출처='프리패스' 건, 아이디/회사명에 테스트 흔적이 있는 건,
+    신청과정명에 '카드결제'가 들어간 건을 제외한다.
     (신청명단을 쓰는 1·2·3단계 모두 공통 적용)
 
     반환값: (제외하고 남은 df, 제외된 건수)
@@ -106,7 +110,7 @@ def classify_course(course_name, refund_table: dict, general_table: dict) -> dic
         course_type = "사업주"
         refund_flag = "환급"
         if in_general:
-            note = "일반과정에도 등록되어 있으나 환급과정 우선 적용(일반→환급 전환)"
+            note = "일반 -> 환급"
     elif in_general:
         price = general_table[course_norm]
         course_type = "일반"

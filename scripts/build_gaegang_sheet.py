@@ -154,7 +154,7 @@ def main():
         sys.exit(1)
 
     print(f"완료: 개강내역 {result['rows']}줄 (신청 {result['students']}건을 묶음, "
-          f"프리패스/테스트 {result['excluded']}건 제외) / 확인필요 {result['flagged']}줄")
+          f"프리패스/테스트/카드결제 {result['excluded']}건 제외) / 확인필요 {result['flagged']}줄")
     print(f"결과 파일: {result['output_path']}")
 
 

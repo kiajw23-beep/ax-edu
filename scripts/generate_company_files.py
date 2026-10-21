@@ -117,7 +117,7 @@ def main():
     for f in result["files"]:
         print(f"생성: {f['path']} ({f['count']}명)")
 
-    print(f"\n완료: 총 {result['total']}건 (프리패스/테스트 {result['excluded']}건 제외) / "
+    print(f"\n완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건 제외) / "
           f"기업 {result['company_count']}곳 / 확인필요 {result['flagged']}건")
     if result["flagged"]:
         print("확인필요 표시가 있는 줄은 금액을 자동으로 채우지 않았으니 직접 확인해주세요.")
