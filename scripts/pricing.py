@@ -37,9 +37,10 @@ EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
 
 
 def is_excluded_row(row) -> bool:
-    """출처가 '프리패스'이거나, 아이디/회사명에 '테스트'/'test'가 들어간 신청 건이면 True."""
+    """출처에 '프리패스'라는 단어가 들어있거나, 아이디/회사명에 '테스트'/'test'가
+    들어간 신청 건이면 True."""
     source = normalize(row.get("출처", ""))
-    if source == "프리패스":
+    if "프리패스" in source:
         return True
     id_text = str(row.get("아이디", "")).lower()
     company_text = str(row.get("회사명", "")).lower()
