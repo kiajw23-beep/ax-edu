@@ -33,6 +33,33 @@ def find_column(columns, keyword):
     return next((c for c in columns if isinstance(c, str) and keyword in c), None)
 
 
+EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
+
+
+def is_excluded_row(row) -> bool:
+    """출처가 '프리패스'이거나, 아이디/회사명에 '테스트'/'test'가 들어간 신청 건이면 True."""
+    source = normalize(row.get("출처", ""))
+    if source == "프리패스":
+        return True
+    id_text = str(row.get("아이디", "")).lower()
+    company_text = str(row.get("회사명", "")).lower()
+    for keyword in EXCLUDE_TEST_KEYWORDS:
+        if keyword in id_text or keyword in company_text:
+            return True
+    return False
+
+
+def filter_excluded_rows(df: pd.DataFrame):
+    """출처='프리패스' 건, 아이디/회사명에 테스트 흔적이 있는 건을 제외한다.
+    (신청명단을 쓰는 1·2·3단계 모두 공통 적용)
+
+    반환값: (제외하고 남은 df, 제외된 건수)
+    """
+    mask = df.apply(is_excluded_row, axis=1)
+    kept = df[~mask].reset_index(drop=True)
+    return kept, int(mask.sum())
+
+
 def load_price_table(path: str) -> dict:
     """과정명 -> {"수강료", "정부지원금", "기업부담금"} 사전을 만든다.
     같은 과정명이 서로 다른 금액으로 중복 등록돼 있으면 {"중복": True}로 표시한다."""

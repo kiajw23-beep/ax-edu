@@ -13,13 +13,16 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import clean_company_name  # noqa: E402
+from pricing import clean_company_name, filter_excluded_rows  # noqa: E402
 
 REQUIRED_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
     "생년월일", "휴대전화", "메일주소", "산인공코드", "신청과정명",
     "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태",
 ]
+
+# 정리된 신청명단에는 필요 없어서 결과 파일에서 빼는 칸
+DROP_FROM_OUTPUT = ["순번", "신청ID", "결제수단", "결제일", "결제금액", "결제상태"]
 
 WHITESPACE_CHECK_COLUMNS = ["회사명", "성함", "아이디", "휴대전화", "메일주소"]
 
@@ -70,6 +73,8 @@ def run(apply_list_path: str, curriculum_path: str, output_path: str) -> dict:
     if missing:
         raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
 
+    df, excluded_count = filter_excluded_rows(df)
+
     refund_courses = load_refund_course_names(curriculum_path)
 
     df["기업명"] = df["회사명"].apply(clean_company_name)
@@ -86,7 +91,7 @@ def run(apply_list_path: str, curriculum_path: str, output_path: str) -> dict:
 
     df["확인필요"] = df.apply(whitespace_note, axis=1)
 
-    ordered_columns = REQUIRED_COLUMNS + ["기업명", "환급구분", "확인필요"]
+    ordered_columns = [c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT] + ["기업명", "환급구분", "확인필요"]
     df = df[ordered_columns]
 
     df.to_excel(output_path, index=False, sheet_name="정리된_신청명단")
@@ -111,6 +116,7 @@ def run(apply_list_path: str, curriculum_path: str, output_path: str) -> dict:
         "refund": refund_count,
         "nonrefund": nonrefund_count,
         "flagged": flagged,
+        "excluded": excluded_count,
         "output_path": output_path,
     }
 
@@ -127,8 +133,8 @@ def main():
         print(str(e))
         sys.exit(1)
 
-    print(f"완료: 총 {result['total']}건 / 환급 {result['refund']}건 / "
-          f"비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
+    print(f"완료: 총 {result['total']}건 (프리패스/테스트 {result['excluded']}건 제외) / "
+          f"환급 {result['refund']}건 / 비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
     print(f"결과 파일: {result['output_path']}")
 
 

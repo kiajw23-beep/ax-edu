@@ -25,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import classify_course, clean_company_name, load_price_table  # noqa: E402
+from pricing import classify_course, clean_company_name, filter_excluded_rows, load_price_table  # noqa: E402
 
 REQUIRED_APPLY_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
@@ -46,6 +46,8 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
     missing = [c for c in REQUIRED_APPLY_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
+
+    df, excluded_count = filter_excluded_rows(df)
 
     refund_table = load_price_table(refund_curriculum_path)
     general_table = load_price_table(general_price_path)
@@ -133,6 +135,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         "rows": total_rows,
         "students": len(per_student_df),
         "flagged": flagged,
+        "excluded": excluded_count,
         "output_path": output_path,
     }
 
@@ -150,7 +153,8 @@ def main():
         print(str(e))
         sys.exit(1)
 
-    print(f"완료: 개강내역 {result['rows']}줄 (신청 {result['students']}건을 묶음) / 확인필요 {result['flagged']}줄")
+    print(f"완료: 개강내역 {result['rows']}줄 (신청 {result['students']}건을 묶음, "
+          f"프리패스/테스트 {result['excluded']}건 제외) / 확인필요 {result['flagged']}줄")
     print(f"결과 파일: {result['output_path']}")
 
 

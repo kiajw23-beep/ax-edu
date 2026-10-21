@@ -95,7 +95,8 @@ class App:
         self._log("=== 1단계: 신청명단 정리 ===")
         try:
             r1 = process_apply_list.run(apply_path, refund_path, out_dir / "1_정리된_신청명단.xlsx")
-            self._log(f"완료: 총 {r1['total']}건 / 환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
+            self._log(f"완료: 총 {r1['total']}건 (프리패스/테스트 {r1['excluded']}건 제외) / "
+                      f"환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
             self._log(f"결과 파일: {r1['output_path']}")
         except Exception:
             self._log("[오류] 1단계 실패:\n" + traceback.format_exc())
@@ -105,14 +106,16 @@ class App:
             r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송")
             for f in r2["files"]:
                 self._log(f"생성: {f['path']} ({f['count']}명)")
-            self._log(f"완료: 총 {r2['total']}건 / 기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
+            self._log(f"완료: 총 {r2['total']}건 (프리패스/테스트 {r2['excluded']}건 제외) / "
+                      f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
         except Exception:
             self._log("[오류] 2단계 실패:\n" + traceback.format_exc())
 
         self._log("\n=== 3단계: 개강내역시트 작성 내용 생성 ===")
         try:
             r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, out_dir / "3_개강내역.xlsx")
-            self._log(f"완료: 개강내역 {r3['rows']}줄 (신청 {r3['students']}건을 묶음) / 확인필요 {r3['flagged']}줄")
+            self._log(f"완료: 개강내역 {r3['rows']}줄 (신청 {r3['students']}건을 묶음, "
+                      f"프리패스/테스트 {r3['excluded']}건 제외) / 확인필요 {r3['flagged']}줄")
             self._log(f"결과 파일: {r3['output_path']}")
         except Exception:
             self._log("[오류] 3단계 실패:\n" + traceback.format_exc())
