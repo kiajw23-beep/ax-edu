@@ -22,58 +22,14 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pricing import classify_course, clean_company_name, load_price_table  # noqa: E402
+
 REQUIRED_APPLY_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
     "생년월일", "휴대전화", "메일주소", "산인공코드", "신청과정명",
     "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태",
 ]
-
-COMPANY_SUFFIXES = ["주식회사", "(주)", "㈜", "유한회사", "유한책임회사", "합자회사", "합명회사"]
-
-
-def clean_company_name(raw) -> str:
-    name = str(raw).strip()
-    for suffix in COMPANY_SUFFIXES:
-        name = name.replace(suffix, "")
-    return re.sub(r"\s+", " ", name).strip()
-
-
-def normalize(text) -> str:
-    return re.sub(r"\s+", " ", str(text)).strip()
-
-
-def find_column(columns, keyword):
-    return next((c for c in columns if isinstance(c, str) and keyword in c), None)
-
-
-def load_price_table(path: str) -> dict:
-    """과정명 -> {"수강료", "정부지원금", "기업부담금"} 사전을 만든다.
-    같은 과정명이 서로 다른 금액으로 중복 등록돼 있으면 {"중복": True}로 표시한다."""
-    df = pd.read_csv(path) if path.lower().endswith(".csv") else pd.read_excel(path)
-
-    name_col = find_column(df.columns, "과정명")
-    fee_col = find_column(df.columns, "수강료")
-    gov_col = find_column(df.columns, "정부지원금")
-    company_col = find_column(df.columns, "기업부담금")
-
-    missing = [label for label, col in [("과정명", name_col), ("수강료", fee_col),
-                                         ("정부지원금", gov_col), ("기업부담금", company_col)]
-               if col is None]
-    if missing:
-        print(f"가격표 파일({path})에 다음 칸을 찾을 수 없습니다: {missing}")
-        sys.exit(1)
-
-    table = {}
-    for _, row in df.iterrows():
-        name = normalize(row[name_col])
-        if not name:
-            continue
-        record = {"수강료": row[fee_col], "정부지원금": row[gov_col], "기업부담금": row[company_col]}
-        if name in table and not table[name].get("중복") and table[name]["수강료"] != record["수강료"]:
-            table[name] = {"중복": True}
-        elif name not in table:
-            table[name] = record
-    return table
 
 
 def main():
@@ -98,41 +54,7 @@ def main():
     rows = []
     for _, r in df.iterrows():
         course = r["신청과정명"]
-        course_norm = normalize(course)
-        in_refund = course_norm in refund_table
-        in_general = course_norm in general_table
-
-        note = ""
-        if in_refund:
-            price = refund_table[course_norm]
-            course_type = "사업주"
-            refund_flag = "환급"
-            if in_general:
-                note = "일반과정에도 등록되어 있으나 환급과정 우선 적용(일반→환급 전환)"
-        elif in_general:
-            price = general_table[course_norm]
-            course_type = "일반"
-            refund_flag = "비환급"
-        else:
-            price = None
-            course_type = "확인필요"
-            refund_flag = "확인필요"
-            note = "환급/비환급 커리큘럼 어디에도 과정명이 없음 - 금액 직접 확인 필요"
-
-        if price is not None and price.get("중복"):
-            price = None
-            note = (note + " / " if note else "") + "같은 과정명이 가격표에 서로 다른 금액으로 중복 등록되어 금액 확인 필요"
-
-        if price is None:
-            tuition = gov = company_burden = None
-        else:
-            tuition = price["수강료"]
-            if refund_flag == "환급":
-                gov = price["정부지원금"]
-                company_burden = price["기업부담금"]
-            else:  # 비환급: 정부지원금 없음 -> 기업부담금 = 수강료 전액
-                gov = 0
-                company_burden = tuition
+        result = classify_course(course, refund_table, general_table)
 
         rows.append({
             "기업명": clean_company_name(r["회사명"]),
@@ -143,12 +65,12 @@ def main():
             "과정명": course,
             "개강일": r["교육시작일"],
             "종료일": r["교육종료일"],
-            "과정유형": course_type,
-            "총수강료": tuition,
-            "정부지원금": gov,
-            "기업부담금": company_burden,
+            "과정유형": result["과정유형"],
+            "총수강료": result["수강료"],
+            "정부지원금": result["정부지원금"],
+            "기업부담금": result["기업부담금"],
             "승인여부": "승인대기",
-            "확인필요": note,
+            "확인필요": result["확인필요"],
         })
 
     out_df = pd.DataFrame(rows)

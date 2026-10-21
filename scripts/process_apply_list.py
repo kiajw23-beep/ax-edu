@@ -6,10 +6,14 @@
 """
 import re
 import sys
+from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pricing import clean_company_name  # noqa: E402
 
 REQUIRED_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
@@ -17,16 +21,7 @@ REQUIRED_COLUMNS = [
     "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태",
 ]
 
-COMPANY_SUFFIXES = ["주식회사", "(주)", "㈜", "유한회사", "유한책임회사", "합자회사", "합명회사"]
-
 WHITESPACE_CHECK_COLUMNS = ["회사명", "성함", "아이디", "휴대전화", "메일주소"]
-
-
-def clean_company_name(raw) -> str:
-    name = str(raw).strip()
-    for suffix in COMPANY_SUFFIXES:
-        name = name.replace(suffix, "")
-    return re.sub(r"\s+", " ", name).strip()
 
 
 def has_whitespace_issue(value) -> bool:
