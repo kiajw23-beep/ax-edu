@@ -2,7 +2,7 @@
 """신청명단에서 도쿄일렉트론코리아 소속 신청 건만 모아 별도 파일로 만든다.
 
 사용법:
-    python3 scripts/tel_list.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>
+    python3 scripts/tel_list.py <신청명단.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>
 
 출력 칸(사용자가 지정한 순서 그대로):
     성함, 아이디, 과정명, 신청일, 교육시작일, 교육종료일, 학점, 교육비, 확인필요
@@ -14,7 +14,9 @@
 - 학점: 신청과정명을 학점 파일의 과정명 칸들("과정명", "최종 과정명", 제목 없는 칸)과
   공백 차이만 보정해 그대로 대조한다. 못 찾거나 같은 이름이 서로 다른 학점으로
   중복돼 있으면 비워두고 확인필요로 표시한다.
-- 교육비: 1인 수강료(1·2·3단계와 같은 환급/비환급 가격표 규칙).
+- 교육비: 환급과정 여부와 관계없이 무조건 비환급 가격표의 1인 수강료를 쓴다.
+  비환급 가격표에 과정명이 없거나 서로 다른 금액으로 중복돼 있으면 비워두고
+  확인필요로 표시한다.
 """
 import sys
 from pathlib import Path
@@ -24,7 +26,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import classify_course, filter_excluded_rows, find_column, load_price_table, normalize, split_tel_rows  # noqa: E402
+from pricing import filter_excluded_rows, find_column, load_price_table, normalize, split_tel_rows  # noqa: E402
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
 OUTPUT_COLUMNS = ["성함", "아이디", "과정명", "신청일", "교육시작일", "교육종료일", "학점", "교육비", "확인필요"]
@@ -56,8 +58,7 @@ def load_credit_table(path: str) -> dict:
     return table
 
 
-def run(apply_path: str, refund_curriculum_path: str, general_price_path: str,
-        credit_path: str, output_path: str) -> dict:
+def run(apply_path: str, general_price_path: str, credit_path: str, output_path: str) -> dict:
     df = pd.read_excel(apply_path)
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -66,17 +67,24 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str,
     df, _ = filter_excluded_rows(df)
     _, tel_df = split_tel_rows(df)
 
-    refund_table = load_price_table(refund_curriculum_path)
     general_table = load_price_table(general_price_path)
     credit_table = load_credit_table(credit_path)
 
     rows = []
     for _, r in tel_df.iterrows():
         course = r["신청과정명"]
-        price = classify_course(course, refund_table, general_table)
-        notes = [price["확인필요"]] if price["확인필요"] else []
-
         course_norm = normalize(course)
+        notes = []
+
+        price = general_table.get(course_norm)
+        tuition = None
+        if price is None:
+            notes.append("비환급 가격표에 과정명이 없음 - 교육비 확인 필요")
+        elif price.get("중복"):
+            notes.append("비환급 가격표에 같은 과정명이 서로 다른 금액으로 중복 등록 - 교육비 확인 필요")
+        else:
+            tuition = price["수강료"]
+
         credit = credit_table.get(course_norm)
         if course_norm not in credit_table:
             notes.append("학점 파일에 과정명이 없음 - 학점 확인 필요")
@@ -91,7 +99,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str,
             "교육시작일": r["교육시작일"],
             "교육종료일": r["교육종료일"],
             "학점": credit,
-            "교육비": price["수강료"],
+            "교육비": tuition,
             "확인필요": " / ".join(notes),
         })
 
@@ -116,13 +124,13 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str,
 
 
 def main():
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 5:
         print("사용법: python3 scripts/tel_list.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>")
+              "<신청명단.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>")
         sys.exit(1)
 
     try:
-        result = run(*sys.argv[1:6])
+        result = run(*sys.argv[1:5])
     except ValueError as e:
         print(str(e))
         sys.exit(1)

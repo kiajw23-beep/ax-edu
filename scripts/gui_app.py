@@ -137,7 +137,7 @@ class App:
         if self.save_tel.get():
             self._log("\n=== 도쿄일렉트론코리아 별도 파일 ===")
             try:
-                r4 = tel_list.run(apply_path, refund_path, general_path, self.credit_path.get(),
+                r4 = tel_list.run(apply_path, general_path, self.credit_path.get(),
                                   out_dir / "4_도쿄일렉트론코리아.xlsx")
                 self._log(f"완료: {r4['total']}건 / 확인필요 {r4['flagged']}건")
                 self._log(f"결과 파일: {r4['output_path']}")
