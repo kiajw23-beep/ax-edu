@@ -22,7 +22,7 @@ REQUIRED_COLUMNS = [
 ]
 
 # 정리된 신청명단에는 필요 없어서 결과 파일에서 빼는 칸
-DROP_FROM_OUTPUT = ["순번", "신청ID", "결제수단", "결제일", "결제금액", "결제상태"]
+DROP_FROM_OUTPUT = ["신청ID", "결제수단", "결제일", "결제금액", "결제상태"]
 
 WHITESPACE_CHECK_COLUMNS = ["회사명", "성함", "아이디", "휴대전화", "메일주소"]
 
