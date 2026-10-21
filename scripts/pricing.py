@@ -12,7 +12,6 @@ process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
   (추측해서 채우지 않는다).
 """
 import re
-import sys
 
 import pandas as pd
 
@@ -48,8 +47,7 @@ def load_price_table(path: str) -> dict:
                                          ("정부지원금", gov_col), ("기업부담금", company_col)]
                if col is None]
     if missing:
-        print(f"가격표 파일({path})에 다음 칸을 찾을 수 없습니다: {missing}")
-        sys.exit(1)
+        raise ValueError(f"가격표 파일({path})에 다음 칸을 찾을 수 없습니다: {missing}")
 
     table = {}
     for _, row in df.iterrows():

@@ -32,21 +32,16 @@ REQUIRED_APPLY_COLUMNS = [
 ]
 
 
-def main():
-    if len(sys.argv) != 5:
-        print("사용법: python3 scripts/generate_company_files.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력폴더>")
-        sys.exit(1)
-
-    apply_path, refund_curriculum_path, general_price_path, out_dir = sys.argv[1:5]
+def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, out_dir: str) -> dict:
+    """기업별 발송 파일들을 out_dir에 생성하고 요약 결과를 돌려준다.
+    입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_excel(apply_path)
     missing = [c for c in REQUIRED_APPLY_COLUMNS if c not in df.columns]
     if missing:
-        print(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
-        sys.exit(1)
+        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
 
     refund_table = load_price_table(refund_curriculum_path)
     general_table = load_price_table(general_price_path)
@@ -93,11 +88,34 @@ def main():
                 cell.fill = fill
         wb.save(file_path)
 
-        created_files.append(file_path)
-        print(f"생성: {file_path} ({len(group)}명)")
+        created_files.append({"path": file_path, "count": len(group)})
 
-    print(f"\n완료: 총 {len(out_df)}건 / 기업 {len(created_files)}곳 / 확인필요 {total_flagged}건")
-    if total_flagged:
+    return {
+        "total": len(out_df),
+        "company_count": len(created_files),
+        "flagged": total_flagged,
+        "files": created_files,
+    }
+
+
+def main():
+    if len(sys.argv) != 5:
+        print("사용법: python3 scripts/generate_company_files.py "
+              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력폴더>")
+        sys.exit(1)
+
+    apply_path, refund_curriculum_path, general_price_path, out_dir = sys.argv[1:5]
+    try:
+        result = run(apply_path, refund_curriculum_path, general_price_path, out_dir)
+    except ValueError as e:
+        print(str(e))
+        sys.exit(1)
+
+    for f in result["files"]:
+        print(f"생성: {f['path']} ({f['count']}명)")
+
+    print(f"\n완료: 총 {result['total']}건 / 기업 {result['company_count']}곳 / 확인필요 {result['flagged']}건")
+    if result["flagged"]:
         print("확인필요 표시가 있는 줄은 금액을 자동으로 채우지 않았으니 직접 확인해주세요.")
 
 

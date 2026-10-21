@@ -39,19 +39,13 @@ OUTPUT_COLUMNS = [
 ]
 
 
-def main():
-    if len(sys.argv) != 5:
-        print("사용법: python3 scripts/build_gaegang_sheet.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>")
-        sys.exit(1)
-
-    apply_path, refund_curriculum_path, general_price_path, output_path = sys.argv[1:5]
-
+def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str) -> dict:
+    """개강내역 집계 결과를 output_path에 저장하고 요약 결과를 돌려준다.
+    입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = pd.read_excel(apply_path)
     missing = [c for c in REQUIRED_APPLY_COLUMNS if c not in df.columns]
     if missing:
-        print(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
-        sys.exit(1)
+        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
 
     refund_table = load_price_table(refund_curriculum_path)
     general_table = load_price_table(general_price_path)
@@ -134,8 +128,30 @@ def main():
 
     total_rows = len(out_df)
     flagged = int((out_df["확인필요"] != "").sum())
-    print(f"완료: 개강내역 {total_rows}줄 (신청 {len(per_student_df)}건을 묶음) / 확인필요 {flagged}줄")
-    print(f"결과 파일: {output_path}")
+
+    return {
+        "rows": total_rows,
+        "students": len(per_student_df),
+        "flagged": flagged,
+        "output_path": output_path,
+    }
+
+
+def main():
+    if len(sys.argv) != 5:
+        print("사용법: python3 scripts/build_gaegang_sheet.py "
+              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>")
+        sys.exit(1)
+
+    apply_path, refund_curriculum_path, general_price_path, output_path = sys.argv[1:5]
+    try:
+        result = run(apply_path, refund_curriculum_path, general_price_path, output_path)
+    except ValueError as e:
+        print(str(e))
+        sys.exit(1)
+
+    print(f"완료: 개강내역 {result['rows']}줄 (신청 {result['students']}건을 묶음) / 확인필요 {result['flagged']}줄")
+    print(f"결과 파일: {result['output_path']}")
 
 
 if __name__ == "__main__":

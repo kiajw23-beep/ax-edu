@@ -62,18 +62,13 @@ def load_refund_course_names(path: str) -> set[str]:
     return names
 
 
-def main():
-    if len(sys.argv) != 4:
-        print("사용법: python3 scripts/process_apply_list.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <출력파일.xlsx>")
-        sys.exit(1)
-
-    apply_list_path, curriculum_path, output_path = sys.argv[1:4]
-
+def run(apply_list_path: str, curriculum_path: str, output_path: str) -> dict:
+    """신청명단을 정리해 output_path에 저장하고 요약 결과를 돌려준다.
+    입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = pd.read_excel(apply_list_path)
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
-        print(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
-        sys.exit(1)
+        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
 
     refund_courses = load_refund_course_names(curriculum_path)
 
@@ -111,8 +106,30 @@ def main():
     nonrefund_count = total - refund_count
     flagged = int((df["확인필요"] != "").sum())
 
-    print(f"완료: 총 {total}건 / 환급 {refund_count}건 / 비환급 {nonrefund_count}건 / 확인필요 {flagged}건")
-    print(f"결과 파일: {output_path}")
+    return {
+        "total": total,
+        "refund": refund_count,
+        "nonrefund": nonrefund_count,
+        "flagged": flagged,
+        "output_path": output_path,
+    }
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("사용법: python3 scripts/process_apply_list.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <출력파일.xlsx>")
+        sys.exit(1)
+
+    apply_list_path, curriculum_path, output_path = sys.argv[1:4]
+    try:
+        result = run(apply_list_path, curriculum_path, output_path)
+    except ValueError as e:
+        print(str(e))
+        sys.exit(1)
+
+    print(f"완료: 총 {result['total']}건 / 환급 {result['refund']}건 / "
+          f"비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
+    print(f"결과 파일: {result['output_path']}")
 
 
 if __name__ == "__main__":
