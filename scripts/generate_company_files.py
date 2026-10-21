@@ -23,7 +23,9 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import classify_course, clean_company_name, filter_excluded_rows, load_price_table  # noqa: E402
+from pricing import (  # noqa: E402
+    classify_course, clean_company_name, filter_excluded_rows, load_price_table, split_tel_rows,
+)
 
 REQUIRED_APPLY_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
@@ -44,6 +46,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
 
     df, excluded_count = filter_excluded_rows(df)
+    df, tel_df = split_tel_rows(df)
 
     refund_table = load_price_table(refund_curriculum_path)
     general_table = load_price_table(general_price_path)
@@ -97,6 +100,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         "company_count": len(created_files),
         "flagged": total_flagged,
         "excluded": excluded_count,
+        "tel_excluded": len(tel_df),
         "files": created_files,
     }
 
@@ -117,7 +121,8 @@ def main():
     for f in result["files"]:
         print(f"생성: {f['path']} ({f['count']}명)")
 
-    print(f"\n완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건 제외) / "
+    print(f"\n완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건, "
+          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외) / "
           f"기업 {result['company_count']}곳 / 확인필요 {result['flagged']}건")
     if result["flagged"]:
         print("확인필요 표시가 있는 줄은 금액을 자동으로 채우지 않았으니 직접 확인해주세요.")

@@ -65,6 +65,21 @@ def filter_excluded_rows(df: pd.DataFrame):
     return kept, int(mask.sum())
 
 
+# 이 회사 신청 건은 1·2·3단계 결과에서 항상 빼고, 필요하면 별도 파일로 만든다(tel_list.py).
+TEL_COMPANY_NAME = "도쿄일렉트론코리아"
+
+
+def is_tel_row(row) -> bool:
+    """회사명(법인형태·띄어쓰기 제거)이 '도쿄일렉트론코리아'와 정확히 같으면 True."""
+    return re.sub(r"\s+", "", clean_company_name(row.get("회사명", ""))) == TEL_COMPANY_NAME
+
+
+def split_tel_rows(df: pd.DataFrame):
+    """반환값: (도쿄일렉트론코리아 건을 뺀 df, 도쿄일렉트론코리아 건만 모은 df)"""
+    mask = df.apply(is_tel_row, axis=1) if len(df) else pd.Series(dtype=bool)
+    return df[~mask].reset_index(drop=True), df[mask].reset_index(drop=True)
+
+
 def load_price_table(path: str) -> dict:
     """과정명 -> {"수강료", "정부지원금", "기업부담금"} 사전을 만든다.
     같은 과정명이 서로 다른 금액으로 중복 등록돼 있으면 {"중복": True}로 표시한다."""

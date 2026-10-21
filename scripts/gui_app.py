@@ -2,10 +2,12 @@
 """월별 개강 업무 도구 - 화면(GUI) 버전.
 
 신청명단 / 환급과정 커리큘럼 / 비환급 가격표, 3개 파일을 고르고 "실행"을
-누르면 저장 폴더를 고른 뒤 아래 3개 결과를 한 번에 만든다.
+누르면 저장 폴더를 고른 뒤 아래 결과를 한 번에 만든다.
     1_정리된_신청명단.xlsx
     2_기업별발송/ (기업별 파일들)
     3_개강내역.xlsx
+    4_도쿄일렉트론코리아.xlsx (체크박스 선택 + 학점 파일을 고른 경우에만)
+도쿄일렉트론코리아 신청 건은 체크 여부와 관계없이 1~3단계 결과에서 항상 빠진다.
 
 개인정보가 들어있는 파일을 다루므로 이 프로그램은 인터넷에 아무것도
 전송하지 않는다(전부 이 컴퓨터 안에서만 처리).
@@ -18,7 +20,7 @@ exe로 만드는 법(윈도우 PC에서):
 import sys
 import traceback
 from pathlib import Path
-from tkinter import Tk, StringVar, filedialog, messagebox
+from tkinter import BooleanVar, Tk, StringVar, filedialog, messagebox
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
@@ -26,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import process_apply_list  # noqa: E402
 import generate_company_files  # noqa: E402
 import build_gaegang_sheet  # noqa: E402
+import tel_list  # noqa: E402
 
 
 class App:
@@ -37,6 +40,8 @@ class App:
         self.apply_path = StringVar()
         self.refund_path = StringVar()
         self.general_path = StringVar()
+        self.credit_path = StringVar()
+        self.save_tel = BooleanVar(value=False)
 
         frame = ttk.Frame(root, padding=12)
         frame.pack(fill="both", expand=True)
@@ -44,16 +49,19 @@ class App:
         self._add_file_row(frame, 0, "① 신청명단", self.apply_path)
         self._add_file_row(frame, 1, "② 환급과정 커리큘럼", self.refund_path)
         self._add_file_row(frame, 2, "③ 비환급 가격표", self.general_path)
+        ttk.Checkbutton(frame, text="도쿄일렉트론코리아 별도 파일 저장",
+                        variable=self.save_tel).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        self._add_file_row(frame, 4, "④ 학점 파일", self.credit_path)
 
-        run_btn = ttk.Button(frame, text="실행 (저장 폴더 선택 후 1~3단계 전부 처리)", command=self.run_all)
-        run_btn.grid(row=3, column=0, columnspan=3, pady=12, sticky="ew")
+        run_btn = ttk.Button(frame, text="실행 (저장 폴더 선택 후 전부 처리)", command=self.run_all)
+        run_btn.grid(row=5, column=0, columnspan=3, pady=12, sticky="ew")
 
-        ttk.Label(frame, text="처리 결과").grid(row=4, column=0, sticky="w")
+        ttk.Label(frame, text="처리 결과").grid(row=6, column=0, sticky="w")
         self.log = ScrolledText(frame, height=18, state="disabled")
-        self.log.grid(row=5, column=0, columnspan=3, sticky="nsew", pady=(4, 0))
+        self.log.grid(row=7, column=0, columnspan=3, sticky="nsew", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(5, weight=1)
+        frame.rowconfigure(7, weight=1)
 
     def _add_file_row(self, parent, row, label, var: StringVar):
         ttk.Label(parent, text=label, width=20).grid(row=row, column=0, sticky="w", pady=4)
@@ -78,6 +86,9 @@ class App:
         if not (self.apply_path.get() and self.refund_path.get() and self.general_path.get()):
             messagebox.showwarning("파일을 모두 선택해주세요", "신청명단 / 환급과정 커리큘럼 / 비환급 가격표, 3개 파일을 모두 골라야 합니다.")
             return
+        if self.save_tel.get() and not self.credit_path.get():
+            messagebox.showwarning("학점 파일을 선택해주세요", "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다.")
+            return
 
         out_dir_str = filedialog.askdirectory(title="결과를 저장할 폴더를 선택하세요")
         if not out_dir_str:
@@ -95,7 +106,8 @@ class App:
         self._log("=== 1단계: 신청명단 정리 ===")
         try:
             r1 = process_apply_list.run(apply_path, refund_path, general_path, out_dir / "1_정리된_신청명단.xlsx")
-            self._log(f"완료: 총 {r1['total']}건 (프리패스/테스트/카드결제 {r1['excluded']}건 제외) / "
+            self._log(f"완료: 총 {r1['total']}건 (프리패스/테스트/카드결제 {r1['excluded']}건, "
+                      f"도쿄일렉트론코리아 {r1['tel_excluded']}건 제외) / "
                       f"환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
             self._log(f"결과 파일: {r1['output_path']}")
         except Exception:
@@ -106,7 +118,8 @@ class App:
             r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송")
             for f in r2["files"]:
                 self._log(f"생성: {f['path']} ({f['count']}명)")
-            self._log(f"완료: 총 {r2['total']}건 (프리패스/테스트/카드결제 {r2['excluded']}건 제외) / "
+            self._log(f"완료: 총 {r2['total']}건 (프리패스/테스트/카드결제 {r2['excluded']}건, "
+                      f"도쿄일렉트론코리아 {r2['tel_excluded']}건 제외) / "
                       f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
         except Exception:
             self._log("[오류] 2단계 실패:\n" + traceback.format_exc())
@@ -115,10 +128,21 @@ class App:
         try:
             r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, out_dir / "3_개강내역.xlsx")
             self._log(f"완료: 개강내역 {r3['rows']}줄 (신청 {r3['students']}건을 묶음, "
-                      f"프리패스/테스트/카드결제 {r3['excluded']}건 제외) / 확인필요 {r3['flagged']}줄")
+                      f"프리패스/테스트/카드결제 {r3['excluded']}건, "
+                      f"도쿄일렉트론코리아 {r3['tel_excluded']}건 제외) / 확인필요 {r3['flagged']}줄")
             self._log(f"결과 파일: {r3['output_path']}")
         except Exception:
             self._log("[오류] 3단계 실패:\n" + traceback.format_exc())
+
+        if self.save_tel.get():
+            self._log("\n=== 도쿄일렉트론코리아 별도 파일 ===")
+            try:
+                r4 = tel_list.run(apply_path, refund_path, general_path, self.credit_path.get(),
+                                  out_dir / "4_도쿄일렉트론코리아.xlsx")
+                self._log(f"완료: {r4['total']}건 / 확인필요 {r4['flagged']}건")
+                self._log(f"결과 파일: {r4['output_path']}")
+            except Exception:
+                self._log("[오류] 도쿄일렉트론코리아 파일 생성 실패:\n" + traceback.format_exc())
 
         self._log(f"\n모든 작업이 끝났습니다. 저장 위치: {out_dir}")
         messagebox.showinfo("완료", f"처리가 끝났습니다.\n저장 위치: {out_dir}\n\n노란색으로 표시된 '확인필요' 줄은 직접 확인해주세요.")
