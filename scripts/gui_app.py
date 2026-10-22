@@ -8,8 +8,10 @@
     3_개강내역.xlsx
     4_도쿄일렉트론코리아.xlsx (체크박스 선택 + 학점 파일을 고른 경우에만)
     5_제외된_신청명단.xlsx (프리패스/테스트/카드결제로 결과에서 빠진 신청 건만 모은 파일, 항상 생성)
-"추가 신청 반영" 버튼은 ⑤ 추가 신청 파일 + ⑥ 기존 개강내역 파일을 함께 골라
-개별로 더 들어온 신청을 반영한다(자세한 규칙은 add_applications.py 참고).
+"추가 신청 반영" 버튼은 ⑤ 추가 신청 파일을 골라 개별로 더 들어온 신청을 반영한다
+(자세한 규칙은 add_applications.py 참고). ⑥ 기존 개강내역 파일은 선택사항이며,
+고르면 그 파일을 갱신(교육회차 유지 + 인원 변경 확인필요)하고, 고르지 않으면
+3_개강내역_추가_월일_시분.xlsx로 새로 만든다(교육회차는 비워둠).
 도쿄일렉트론코리아 신청 건은 체크 여부와 관계없이 1~3단계 결과에서 항상 빠진다.
 
 개인정보가 들어있는 파일을 다루므로 이 프로그램은 인터넷에 아무것도
@@ -65,7 +67,7 @@ class App:
         ttk.Separator(frame).grid(row=6, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Label(frame, text="개별 추가 신청 (①②③ 파일도 함께 사용)").grid(row=7, column=0, columnspan=3, sticky="w")
         self._add_file_row(frame, 8, "⑤ 추가 신청 파일", self.added_path)
-        self._add_file_row(frame, 9, "⑥ 기존 개강내역 파일", self.existing_gaegang_path)
+        self._add_file_row(frame, 9, "⑥ 기존 개강내역 파일 (선택)", self.existing_gaegang_path)
         add_btn = ttk.Button(frame, text="추가 신청 반영 (저장 폴더 선택)", command=self.run_added)
         add_btn.grid(row=10, column=0, columnspan=3, pady=12, sticky="ew")
 
@@ -175,10 +177,11 @@ class App:
 
     def run_added(self):
         if not (self.apply_path.get() and self.refund_path.get() and self.general_path.get()
-                and self.added_path.get() and self.existing_gaegang_path.get()):
+                and self.added_path.get()):
             messagebox.showwarning("파일을 모두 선택해주세요",
                                    "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급 가격표 / "
-                                   "⑤ 추가 신청 파일 / ⑥ 기존 개강내역 파일을 모두 골라야 합니다.")
+                                   "⑤ 추가 신청 파일을 모두 골라야 합니다. "
+                                   "⑥ 기존 개강내역 파일은 선택사항입니다.")
             return
         if self.save_tel.get() and not self.credit_path.get():
             messagebox.showwarning("학점 파일을 선택해주세요", "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다.")
@@ -198,9 +201,11 @@ class App:
                              credit_path=self.credit_path.get() if self.save_tel.get() else None,
                              log=self._log)
 
+        gaegang_msg = ("개강내역은 고른 파일을 갱신했습니다." if self.existing_gaegang_path.get()
+                       else "⑥을 고르지 않아 개강내역은 새 파일로 만들었고, 교육회차는 비어 있습니다.")
         self._log(f"\n추가 신청 반영이 끝났습니다. 저장 위치: {out_dir}")
         messagebox.showinfo("완료", f"추가 신청 반영이 끝났습니다.\n저장 위치: {out_dir}\n\n"
-                                    "개강내역은 고른 파일을 갱신했습니다. 노란색 '확인필요' 줄은 직접 확인해주세요.")
+                                    f"{gaegang_msg} 노란색 '확인필요' 줄은 직접 확인해주세요.")
         self._clear_file_selections()
 
         if sys.platform == "win32":

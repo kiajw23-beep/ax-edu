@@ -2,14 +2,16 @@
 """개별로 더 들어온 신청(추가 신청 파일)을 기존 결과에 반영한다.
 
 사용법:
-    python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx> <출력폴더> [학점파일.xlsx]
+    python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx 또는 ""> <출력폴더> [학점파일.xlsx]
 
 - 추가 신청 파일은 원본 신청명단과 같은 칸이어야 한다.
 - 1단계 신청명단: 원본 + 추가를 합쳐 새 이름(1_정리된_신청명단_추가_월일_시분.xlsx)으로 저장. 기존 파일은 그대로.
 - 2단계 기업별 발송: 추가 신청이 있는 기업만, 그 기업의 원본 + 추가 신청을 담아
   새 폴더(2_기업별발송_추가_월일_시분)에 저장. 기존 파일은 그대로.
-- 3단계 개강내역: 고른 기존 개강내역 파일을 갱신(덮어씀). 교육회차는 그대로 옮기고,
-  인원이 바뀐 줄·새로 생긴 줄은 확인필요(노란색)에 표시.
+- 3단계 개강내역: 기존 개강내역 파일을 주면(권장) 그 파일을 갱신(덮어씀). 교육회차는
+  그대로 옮기고, 인원이 바뀐 줄·새로 생긴 줄은 확인필요(노란색)에 표시. 기존 개강내역
+  파일 없이도 처리할 수 있으며, 이 경우 3_개강내역_추가_월일_시분.xlsx로 새로 만들고
+  교육회차는 비워두고(사용자가 직접 채움) 인원 변경 감지는 생략한다.
 - 학점 파일을 주면 도쿄일렉트론코리아 파일도 원본 + 추가로 새 이름으로 만든다.
 - 추가 신청 중 원본에 같은 아이디 + 과정명이 이미 있으면 확인필요로 표시만 한다.
 """
@@ -51,16 +53,23 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
     except Exception:
         log("[오류] 기업별 발송 실패:\n" + traceback.format_exc())
 
-    log("\n=== 추가 신청 반영: 개강내역 갱신 ===")
+    log("\n=== 추가 신청 반영: 개강내역 ===")
     try:
-        r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, existing_gaegang_path,
-                                     added_path, existing_gaegang_path)
-        log(f"완료: 개강내역 {r3['rows']}줄 / 확인필요 {r3['flagged']}줄")
-        log(f"갱신한 파일: {r3['output_path']}")
+        if existing_gaegang_path:
+            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, existing_gaegang_path,
+                                         added_path, existing_gaegang_path)
+            log(f"완료: 개강내역 {r3['rows']}줄 / 확인필요 {r3['flagged']}줄")
+            log(f"갱신한 파일: {r3['output_path']}")
+        else:
+            gaegang_output_path = out_dir / f"3_개강내역_추가_{stamp}.xlsx"
+            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, gaegang_output_path, added_path)
+            log(f"완료: 개강내역 {r3['rows']}줄 / 확인필요 {r3['flagged']}줄 "
+                "(기존 개강내역 파일을 고르지 않아 교육회차는 비어 있고, 인원 변경 감지는 생략됨)")
+            log(f"결과 파일: {r3['output_path']}")
     except PermissionError:
         log("[오류] 개강내역 파일을 저장할 수 없습니다. 엑셀에서 열려 있다면 닫고 다시 실행해주세요.")
     except Exception:
-        log("[오류] 개강내역 갱신 실패:\n" + traceback.format_exc())
+        log("[오류] 개강내역 처리 실패:\n" + traceback.format_exc())
 
     if credit_path:
         log("\n=== 추가 신청 반영: 도쿄일렉트론코리아 ===")
@@ -76,7 +85,7 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
 def main():
     if len(sys.argv) not in (7, 8):
         print("사용법: python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> "
-              "<환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx> <출력폴더> [학점파일.xlsx]")
+              "<환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx 또는 \"\"> <출력폴더> [학점파일.xlsx]")
         sys.exit(1)
     run(*sys.argv[1:7], credit_path=sys.argv[7] if len(sys.argv) == 8 else None)
 
