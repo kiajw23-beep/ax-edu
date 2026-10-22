@@ -14,6 +14,11 @@
 3_개강내역_추가_월일_시분.xlsx로 새로 만든다(교육회차는 비워둠).
 도쿄일렉트론코리아 신청 건은 체크 여부와 관계없이 1~3단계 결과에서 항상 빠진다.
 
+각 파일 선택 줄의 "최근" 버튼을 누르면 그 칸에서 최근에 고른 파일(최대 3개,
+칸마다 따로 기억)이 목록으로 나오고, 클릭하면 그 경로가 그대로 입력된다.
+이 이력은 %APPDATA%\월별개강업무도구\최근파일이력.json 에 저장되어 exe를
+다시 열어도 유지된다(파일 경로만 저장, 파일 내용은 저장하지 않음).
+
 개인정보가 들어있는 파일을 다루므로 이 프로그램은 인터넷에 아무것도
 전송하지 않는다(전부 이 컴퓨터 안에서만 처리).
 
@@ -22,10 +27,12 @@ exe로 만드는 법(윈도우 PC에서):
     pyinstaller --onefile --windowed --name 월별개강업무도구 scripts/gui_app.py
 결과물은 dist/월별개강업무도구.exe 에 생성된다.
 """
+import json
+import os
 import sys
 import traceback
 from pathlib import Path
-from tkinter import BooleanVar, Tk, StringVar, filedialog, messagebox
+from tkinter import BooleanVar, Menu, Tk, StringVar, filedialog, messagebox
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
@@ -36,12 +43,18 @@ import add_applications  # noqa: E402
 import build_gaegang_sheet  # noqa: E402
 import tel_list  # noqa: E402
 
+# 각 파일 선택 줄에서 최근 고른 파일 경로를 기억해두는 곳(파일칸 종류별로 따로 저장).
+RECENT_FILES_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "월별개강업무도구" / "최근파일이력.json"
+MAX_RECENT_FILES = 3
+
 
 class App:
     def __init__(self, root: Tk):
         self.root = root
         root.title("월별 개강 업무 도구")
-        root.geometry("640x620")
+        root.geometry("700x620")
+
+        self.recent_files = self._load_recent_files()
 
         self.apply_path = StringVar()
         self.refund_path = StringVar()
@@ -54,41 +67,83 @@ class App:
         frame = ttk.Frame(root, padding=12)
         frame.pack(fill="both", expand=True)
 
-        self._add_file_row(frame, 0, "① 신청명단", self.apply_path)
-        self._add_file_row(frame, 1, "② 환급과정 커리큘럼", self.refund_path)
-        self._add_file_row(frame, 2, "③ 비환급 가격표", self.general_path)
+        self._add_file_row(frame, 0, "① 신청명단", self.apply_path, "apply")
+        self._add_file_row(frame, 1, "② 환급과정 커리큘럼", self.refund_path, "refund")
+        self._add_file_row(frame, 2, "③ 비환급 가격표", self.general_path, "general")
         ttk.Checkbutton(frame, text="도쿄일렉트론코리아 별도 파일 저장",
-                        variable=self.save_tel).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        self._add_file_row(frame, 4, "④ 학점 파일", self.credit_path)
+                        variable=self.save_tel).grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        self._add_file_row(frame, 4, "④ 학점 파일", self.credit_path, "credit")
 
         run_btn = ttk.Button(frame, text="실행 (저장 폴더 선택 후 전부 처리)", command=self.run_all)
-        run_btn.grid(row=5, column=0, columnspan=3, pady=12, sticky="ew")
+        run_btn.grid(row=5, column=0, columnspan=4, pady=12, sticky="ew")
 
-        ttk.Separator(frame).grid(row=6, column=0, columnspan=3, sticky="ew", pady=4)
-        ttk.Label(frame, text="개별 추가 신청 (①②③ 파일도 함께 사용)").grid(row=7, column=0, columnspan=3, sticky="w")
-        self._add_file_row(frame, 8, "⑤ 추가 신청 파일", self.added_path)
-        self._add_file_row(frame, 9, "⑥ 기존 개강내역 파일 (선택)", self.existing_gaegang_path)
+        ttk.Separator(frame).grid(row=6, column=0, columnspan=4, sticky="ew", pady=4)
+        ttk.Label(frame, text="개별 추가 신청 (①②③ 파일도 함께 사용)").grid(row=7, column=0, columnspan=4, sticky="w")
+        self._add_file_row(frame, 8, "⑤ 추가 신청 파일", self.added_path, "added")
+        self._add_file_row(frame, 9, "⑥ 기존 개강내역 파일 (선택)", self.existing_gaegang_path, "existing_gaegang")
         add_btn = ttk.Button(frame, text="추가 신청 반영 (저장 폴더 선택)", command=self.run_added)
-        add_btn.grid(row=10, column=0, columnspan=3, pady=12, sticky="ew")
+        add_btn.grid(row=10, column=0, columnspan=4, pady=12, sticky="ew")
 
         ttk.Label(frame, text="처리 결과").grid(row=11, column=0, sticky="w")
         self.log = ScrolledText(frame, height=14, state="disabled")
-        self.log.grid(row=12, column=0, columnspan=3, sticky="nsew", pady=(4, 0))
+        self.log.grid(row=12, column=0, columnspan=4, sticky="nsew", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(12, weight=1)
 
-    def _add_file_row(self, parent, row, label, var: StringVar):
+    def _add_file_row(self, parent, row, label, var: StringVar, slot_key: str):
         ttk.Label(parent, text=label, width=20).grid(row=row, column=0, sticky="w", pady=4)
         ttk.Entry(parent, textvariable=var, state="readonly").grid(row=row, column=1, sticky="ew", padx=6)
-        ttk.Button(parent, text="파일 선택", command=lambda: self._pick_file(var)).grid(row=row, column=2)
+        ttk.Button(parent, text="파일 선택", command=lambda: self._pick_file(var, slot_key)).grid(row=row, column=2)
+        recent_btn = ttk.Button(parent, text="최근", width=5)
+        recent_btn.configure(command=lambda b=recent_btn: self._show_recent_files(slot_key, var, b))
+        recent_btn.grid(row=row, column=3, padx=(4, 0))
 
-    def _pick_file(self, var: StringVar):
+    def _pick_file(self, var: StringVar, slot_key: str):
         path = filedialog.askopenfilename(
             title="파일 선택", filetypes=[("엑셀/CSV 파일", "*.xlsx *.xls *.csv"), ("모든 파일", "*.*")]
         )
         if path:
             var.set(path)
+            self._remember_recent_file(slot_key, path)
+
+    def _load_recent_files(self) -> dict:
+        try:
+            with open(RECENT_FILES_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_recent_files(self):
+        try:
+            RECENT_FILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(RECENT_FILES_PATH, "w", encoding="utf-8") as f:
+                json.dump(self.recent_files, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def _remember_recent_file(self, slot_key: str, path: str):
+        paths = [p for p in self.recent_files.get(slot_key, []) if p != path]
+        paths.insert(0, path)
+        self.recent_files[slot_key] = paths[:MAX_RECENT_FILES]
+        self._save_recent_files()
+
+    def _show_recent_files(self, slot_key: str, var: StringVar, anchor_widget):
+        menu = Menu(self.root, tearoff=0)
+        paths = self.recent_files.get(slot_key, [])
+        if not paths:
+            menu.add_command(label="최근 선택한 파일 없음", state="disabled")
+        else:
+            for path in paths:
+                menu.add_command(label=Path(path).name,
+                                  command=lambda p=path: self._apply_recent_file(slot_key, var, p))
+        x = anchor_widget.winfo_rootx()
+        y = anchor_widget.winfo_rooty() + anchor_widget.winfo_height()
+        menu.tk_popup(x, y)
+
+    def _apply_recent_file(self, slot_key: str, var: StringVar, path: str):
+        var.set(path)
+        self._remember_recent_file(slot_key, path)
 
     def _clear_file_selections(self):
         """작업이 끝나면 골랐던 파일들을 비워서 다음 작업 때 다시 고르게 한다."""
