@@ -36,21 +36,26 @@ def find_column(columns, keyword):
 EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
 
 
-def is_excluded_row(row) -> bool:
-    """출처에 '프리패스'라는 단어가 들어있거나, 아이디/회사명에 '테스트'/'test'가
-    들어갔거나, 신청과정명에 '카드결제'(띄어쓰기 무관)가 들어간 신청 건이면 True."""
+def exclusion_reason(row) -> str:
+    """출처에 '프리패스'가 들어있거나, 신청과정명에 '카드결제'(띄어쓰기 무관)가
+    들어있거나, 아이디/회사명에 '테스트'/'test'가 들어간 신청 건이면 그 사유를
+    돌려주고, 아니면 빈 문자열을 돌려준다."""
     source = normalize(row.get("출처", ""))
     if "프리패스" in source:
-        return True
+        return "프리패스"
     course_no_space = re.sub(r"\s+", "", str(row.get("신청과정명", "")))
     if "카드결제" in course_no_space:
-        return True
+        return "카드결제"
     id_text = str(row.get("아이디", "")).lower()
     company_text = str(row.get("회사명", "")).lower()
     for keyword in EXCLUDE_TEST_KEYWORDS:
         if keyword in id_text or keyword in company_text:
-            return True
-    return False
+            return "테스트"
+    return ""
+
+
+def is_excluded_row(row) -> bool:
+    return bool(exclusion_reason(row))
 
 
 def filter_excluded_rows(df: pd.DataFrame):
@@ -58,11 +63,14 @@ def filter_excluded_rows(df: pd.DataFrame):
     신청과정명에 '카드결제'가 들어간 건을 제외한다.
     (신청명단을 쓰는 1·2·3단계 모두 공통 적용)
 
-    반환값: (제외하고 남은 df, 제외된 건수)
+    반환값: (제외하고 남은 df, 제외된 건만 모은 df("제외사유" 칸 포함), 제외된 건수)
     """
-    mask = df.apply(is_excluded_row, axis=1)
+    reasons = df.apply(exclusion_reason, axis=1)
+    mask = reasons != ""
     kept = df[~mask].reset_index(drop=True)
-    return kept, int(mask.sum())
+    excluded = df[mask].reset_index(drop=True).copy()
+    excluded["제외사유"] = reasons[mask].reset_index(drop=True)
+    return kept, excluded, int(mask.sum())
 
 
 DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"

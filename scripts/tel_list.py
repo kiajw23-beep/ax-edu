@@ -65,7 +65,7 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
     """added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 만든다."""
     df = read_apply_list(apply_path, REQUIRED_COLUMNS, added_path)
 
-    df, _ = filter_excluded_rows(df)
+    df, _, _ = filter_excluded_rows(df)
     _, tel_df = split_tel_rows(df)
 
     general_table = load_price_table(general_price_path)

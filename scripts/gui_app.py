@@ -7,6 +7,7 @@
     2_기업별발송/ (기업별 파일들)
     3_개강내역.xlsx
     4_도쿄일렉트론코리아.xlsx (체크박스 선택 + 학점 파일을 고른 경우에만)
+    5_제외된_신청명단.xlsx (프리패스/테스트/카드결제로 결과에서 빠진 신청 건만 모은 파일, 항상 생성)
 "추가 신청 반영" 버튼은 ⑤ 추가 신청 파일 + ⑥ 기존 개강내역 파일을 함께 골라
 개별로 더 들어온 신청을 반영한다(자세한 규칙은 add_applications.py 참고).
 도쿄일렉트론코리아 신청 건은 체크 여부와 관계없이 1~3단계 결과에서 항상 빠진다.
@@ -87,6 +88,12 @@ class App:
         if path:
             var.set(path)
 
+    def _clear_file_selections(self):
+        """작업이 끝나면 골랐던 파일들을 비워서 다음 작업 때 다시 고르게 한다."""
+        for var in (self.apply_path, self.refund_path, self.general_path, self.credit_path,
+                    self.added_path, self.existing_gaegang_path):
+            var.set("")
+
     def _log(self, text: str):
         self.log.configure(state="normal")
         self.log.insert("end", text + "\n")
@@ -122,6 +129,7 @@ class App:
                       f"도쿄일렉트론코리아 {r1['tel_excluded']}건 제외) / "
                       f"환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
             self._log(f"결과 파일: {r1['output_path']}")
+            self._log(f"제외된 신청명단 파일: {r1['excluded_output_path']}")
         except Exception:
             self._log("[오류] 1단계 실패:\n" + traceback.format_exc())
 
@@ -158,6 +166,7 @@ class App:
 
         self._log(f"\n모든 작업이 끝났습니다. 저장 위치: {out_dir}")
         messagebox.showinfo("완료", f"처리가 끝났습니다.\n저장 위치: {out_dir}\n\n노란색으로 표시된 '확인필요' 줄은 직접 확인해주세요.")
+        self._clear_file_selections()
 
         if sys.platform == "win32":
             import os
@@ -192,6 +201,7 @@ class App:
         self._log(f"\n추가 신청 반영이 끝났습니다. 저장 위치: {out_dir}")
         messagebox.showinfo("완료", f"추가 신청 반영이 끝났습니다.\n저장 위치: {out_dir}\n\n"
                                     "개강내역은 고른 파일을 갱신했습니다. 노란색 '확인필요' 줄은 직접 확인해주세요.")
+        self._clear_file_selections()
 
         if sys.platform == "win32":
             import os

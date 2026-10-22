@@ -37,6 +37,7 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
         log(f"완료: 추가 신청 {r1['added']}건 반영 (기존 명단과 중복 의심 {r1['duplicates']}건) / "
             f"전체 {r1['total']}건 / 확인필요 {r1['flagged']}건")
         log(f"결과 파일: {r1['output_path']}")
+        log(f"제외된 신청명단 파일: {r1['excluded_output_path']}")
     except Exception:
         log("[오류] 신청명단 실패:\n" + traceback.format_exc())
 

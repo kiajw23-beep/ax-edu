@@ -46,7 +46,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
 
     df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
-    df, excluded_count = filter_excluded_rows(df)
+    df, _, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
     refund_table = load_price_table(refund_curriculum_path)

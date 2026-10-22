@@ -72,7 +72,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
-    df, excluded_count = filter_excluded_rows(df)
+    df, _, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
     refund_table = load_price_table(refund_curriculum_path)

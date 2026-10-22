@@ -47,7 +47,7 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = read_apply_list(apply_list_path, REQUIRED_COLUMNS, added_path)
 
-    df, excluded_count = filter_excluded_rows(df)
+    df, excluded_df, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
     refund_table = load_price_table(refund_curriculum_path)
@@ -90,6 +90,15 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
             cell.fill = fill
     wb.save(output_path)
 
+    # 5번 파일: 프리패스/테스트/카드결제 때문에 결과에서 빠진 신청 건만 모아서 따로 저장.
+    output_path = Path(output_path)
+    name_suffix = output_path.stem
+    if name_suffix.startswith("1_정리된_신청명단"):
+        name_suffix = name_suffix[len("1_정리된_신청명단"):]
+    excluded_output_path = output_path.parent / f"5_제외된_신청명단{name_suffix}.xlsx"
+    excluded_columns = [c for c in REQUIRED_COLUMNS if c in excluded_df.columns] + ["제외사유"]
+    excluded_df[excluded_columns].to_excel(excluded_output_path, index=False, sheet_name="제외된_신청명단")
+
     total = len(df)
     refund_count = int((df["환급구분"] == "환급").sum())
     nonrefund_count = int((df["환급구분"] == "비환급").sum())
@@ -101,10 +110,11 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         "nonrefund": nonrefund_count,
         "flagged": flagged,
         "excluded": excluded_count,
+        "excluded_output_path": str(excluded_output_path),
         "tel_excluded": len(tel_df),
         "added": added_count,
         "duplicates": duplicate_count,
-        "output_path": output_path,
+        "output_path": str(output_path),
     }
 
 
@@ -125,6 +135,7 @@ def main():
           f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외) / "
           f"환급 {result['refund']}건 / 비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
     print(f"결과 파일: {result['output_path']}")
+    print(f"제외된 신청명단 파일: {result['excluded_output_path']}")
 
 
 if __name__ == "__main__":
