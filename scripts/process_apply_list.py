@@ -13,7 +13,8 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, split_tel_rows,
+    classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
+    split_tel_rows,
 )
 
 REQUIRED_COLUMNS = [
@@ -39,13 +40,12 @@ def has_whitespace_issue(value) -> bool:
     return False
 
 
-def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str) -> dict:
+def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str,
+        added_path: str = None) -> dict:
     """신청명단을 정리해 output_path에 저장하고 요약 결과를 돌려준다.
+    added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 정리한다.
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
-    df = pd.read_excel(apply_list_path)
-    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-    if missing:
-        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
+    df = read_apply_list(apply_list_path, REQUIRED_COLUMNS, added_path)
 
     df, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
@@ -68,12 +68,14 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
 
     whitespace_notes = df.apply(whitespace_note, axis=1)
     df["확인필요"] = [
-        " / ".join(n for n in (ws_note, price_note) if n)
-        for ws_note, price_note in zip(whitespace_notes, price_notes)
+        " / ".join(n for n in (ws_note, price_note, dup_note) if n)
+        for ws_note, price_note, dup_note in zip(whitespace_notes, price_notes, df["_중복메모"])
     ]
 
     ordered_columns = ([c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]
                         + ["기업명", "환급구분", "수강료", "정부지원금", "기업부담금", "확인필요"])
+    added_count = int(df["_추가"].sum())
+    duplicate_count = int((df["_중복메모"] != "").sum())
     df = df[ordered_columns]
 
     df.to_excel(output_path, index=False, sheet_name="정리된_신청명단")
@@ -100,6 +102,8 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         "flagged": flagged,
         "excluded": excluded_count,
         "tel_excluded": len(tel_df),
+        "added": added_count,
+        "duplicates": duplicate_count,
         "output_path": output_path,
     }
 

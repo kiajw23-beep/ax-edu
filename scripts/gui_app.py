@@ -7,6 +7,8 @@
     2_기업별발송/ (기업별 파일들)
     3_개강내역.xlsx
     4_도쿄일렉트론코리아.xlsx (체크박스 선택 + 학점 파일을 고른 경우에만)
+"추가 신청 반영" 버튼은 ⑤ 추가 신청 파일 + ⑥ 기존 개강내역 파일을 함께 골라
+개별로 더 들어온 신청을 반영한다(자세한 규칙은 add_applications.py 참고).
 도쿄일렉트론코리아 신청 건은 체크 여부와 관계없이 1~3단계 결과에서 항상 빠진다.
 
 개인정보가 들어있는 파일을 다루므로 이 프로그램은 인터넷에 아무것도
@@ -27,6 +29,7 @@ from tkinter.scrolledtext import ScrolledText
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import process_apply_list  # noqa: E402
 import generate_company_files  # noqa: E402
+import add_applications  # noqa: E402
 import build_gaegang_sheet  # noqa: E402
 import tel_list  # noqa: E402
 
@@ -35,13 +38,15 @@ class App:
     def __init__(self, root: Tk):
         self.root = root
         root.title("월별 개강 업무 도구")
-        root.geometry("640x480")
+        root.geometry("640x620")
 
         self.apply_path = StringVar()
         self.refund_path = StringVar()
         self.general_path = StringVar()
         self.credit_path = StringVar()
         self.save_tel = BooleanVar(value=False)
+        self.added_path = StringVar()
+        self.existing_gaegang_path = StringVar()
 
         frame = ttk.Frame(root, padding=12)
         frame.pack(fill="both", expand=True)
@@ -56,12 +61,19 @@ class App:
         run_btn = ttk.Button(frame, text="실행 (저장 폴더 선택 후 전부 처리)", command=self.run_all)
         run_btn.grid(row=5, column=0, columnspan=3, pady=12, sticky="ew")
 
-        ttk.Label(frame, text="처리 결과").grid(row=6, column=0, sticky="w")
-        self.log = ScrolledText(frame, height=18, state="disabled")
-        self.log.grid(row=7, column=0, columnspan=3, sticky="nsew", pady=(4, 0))
+        ttk.Separator(frame).grid(row=6, column=0, columnspan=3, sticky="ew", pady=4)
+        ttk.Label(frame, text="개별 추가 신청 (①②③ 파일도 함께 사용)").grid(row=7, column=0, columnspan=3, sticky="w")
+        self._add_file_row(frame, 8, "⑤ 추가 신청 파일", self.added_path)
+        self._add_file_row(frame, 9, "⑥ 기존 개강내역 파일", self.existing_gaegang_path)
+        add_btn = ttk.Button(frame, text="추가 신청 반영 (저장 폴더 선택)", command=self.run_added)
+        add_btn.grid(row=10, column=0, columnspan=3, pady=12, sticky="ew")
+
+        ttk.Label(frame, text="처리 결과").grid(row=11, column=0, sticky="w")
+        self.log = ScrolledText(frame, height=14, state="disabled")
+        self.log.grid(row=12, column=0, columnspan=3, sticky="nsew", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(7, weight=1)
+        frame.rowconfigure(12, weight=1)
 
     def _add_file_row(self, parent, row, label, var: StringVar):
         ttk.Label(parent, text=label, width=20).grid(row=row, column=0, sticky="w", pady=4)
@@ -146,6 +158,40 @@ class App:
 
         self._log(f"\n모든 작업이 끝났습니다. 저장 위치: {out_dir}")
         messagebox.showinfo("완료", f"처리가 끝났습니다.\n저장 위치: {out_dir}\n\n노란색으로 표시된 '확인필요' 줄은 직접 확인해주세요.")
+
+        if sys.platform == "win32":
+            import os
+            os.startfile(out_dir)  # noqa: S606
+
+
+    def run_added(self):
+        if not (self.apply_path.get() and self.refund_path.get() and self.general_path.get()
+                and self.added_path.get() and self.existing_gaegang_path.get()):
+            messagebox.showwarning("파일을 모두 선택해주세요",
+                                   "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급 가격표 / "
+                                   "⑤ 추가 신청 파일 / ⑥ 기존 개강내역 파일을 모두 골라야 합니다.")
+            return
+        if self.save_tel.get() and not self.credit_path.get():
+            messagebox.showwarning("학점 파일을 선택해주세요", "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다.")
+            return
+
+        out_dir_str = filedialog.askdirectory(title="추가 결과를 저장할 폴더를 선택하세요")
+        if not out_dir_str:
+            return
+        out_dir = Path(out_dir_str)
+
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        self.log.configure(state="disabled")
+
+        add_applications.run(self.apply_path.get(), self.added_path.get(), self.refund_path.get(),
+                             self.general_path.get(), self.existing_gaegang_path.get(), out_dir,
+                             credit_path=self.credit_path.get() if self.save_tel.get() else None,
+                             log=self._log)
+
+        self._log(f"\n추가 신청 반영이 끝났습니다. 저장 위치: {out_dir}")
+        messagebox.showinfo("완료", f"추가 신청 반영이 끝났습니다.\n저장 위치: {out_dir}\n\n"
+                                    "개강내역은 고른 파일을 갱신했습니다. 노란색 '확인필요' 줄은 직접 확인해주세요.")
 
         if sys.platform == "win32":
             import os

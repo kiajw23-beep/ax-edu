@@ -14,7 +14,8 @@
 - 단가(1인기준)/정부지원금/기업부담금 계산 규칙은 generate_company_files.py와 동일
   (환급·비환급 가격표 대조, 양쪽에 다 있으면 환급 우선 + 확인필요 메모).
   정부지원금/기업부담금/총 금액은 인원을 곱한 "그룹 합계" 금액이다.
-- 교육회차 칸은 이 도구가 알 수 없는 정보라 항상 비워둔다(사용자가 직접 채움).
+- 교육회차 칸은 이 도구가 알 수 없는 정보라 비워둔다(사용자가 직접 채움). 추가 신청 반영 시
+  기존 개강내역 파일에 채워둔 교육회차는 그대로 옮긴다.
 - 산인공코드가 같은 그룹 안에서 서로 다르면 비워두고 확인필요로 표시한다.
 - 한 그룹 안에 금액을 알 수 없는(확인필요) 학생이 섞여 있으면, 그 그룹의 금액
   전체를 비워두고 확인필요로 표시한다(일부만 추정해서 채우지 않는다).
@@ -26,7 +27,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, split_tel_rows,
+    classify_course, clean_company_name, filter_excluded_rows, load_price_table, normalize, read_apply_list,
+    split_tel_rows,
 )
 
 REQUIRED_APPLY_COLUMNS = [
@@ -41,13 +43,34 @@ OUTPUT_COLUMNS = [
 ]
 
 
-def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str) -> dict:
-    """개강내역 집계 결과를 output_path에 저장하고 요약 결과를 돌려준다.
-    입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
-    df = pd.read_excel(apply_path)
-    missing = [c for c in REQUIRED_APPLY_COLUMNS if c not in df.columns]
+def sheet_key(company, course, start_date, end_date) -> tuple:
+    return tuple(normalize(v) for v in (company, course, start_date, end_date))
+
+
+def load_existing_sheet(path: str) -> dict:
+    """기존 개강내역 파일에서 (기업명, 과정명, 개강일, 교육종료일) -> {교육회차, 인원}을 읽는다."""
+    old_df = pd.read_excel(path, sheet_name="개강내역")
+    missing = [c for c in OUTPUT_COLUMNS if c not in old_df.columns]
     if missing:
-        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
+        raise ValueError(f"기존 개강내역 파일({path})에 다음 칸이 없습니다: {missing}")
+    table = {}
+    for _, r in old_df.iterrows():
+        session = r["교육회차"]
+        table[sheet_key(r["기업명"], r["과정명"], r["개강일"], r["교육종료일"])] = {
+            "교육회차": "" if pd.isna(session) else session,
+            "인원": r["인원"],
+        }
+    return table
+
+
+def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str,
+        added_path: str = None, existing_path: str = None) -> dict:
+    """개강내역 집계 결과를 output_path에 저장하고 요약 결과를 돌려준다.
+    added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 다시 집계한다.
+    existing_path(기존 개강내역 파일)를 주면 직접 채운 교육회차를 그대로 옮기고,
+    인원이 바뀐 줄·새로 생긴 줄은 확인필요(노란색)에 표시한다.
+    입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
+    df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
     df, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
@@ -67,11 +90,12 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             "단가": result["수강료"],
             "1인정부지원금": result["정부지원금"],
             "1인기업부담금": result["기업부담금"],
-            "확인필요": result["확인필요"],
+            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"]) if n),
         })
     per_student_df = pd.DataFrame(per_student)
 
     group_keys = ["기업명", "과정명", "개강일", "교육종료일"]
+    existing = load_existing_sheet(existing_path) if existing_path else None
     out_rows = []
     for key, group in per_student_df.groupby(group_keys, sort=False, dropna=False):
         company, course, start_date, end_date = key
@@ -80,9 +104,10 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
 
         unit_prices = group["단가"].dropna().unique()
         price_known = group["단가"].notna().all() and len(unit_prices) == 1
-        for note in group["확인필요"]:
-            if note and note not in notes:
-                notes.append(note)
+        for student_note in group["확인필요"]:
+            for note in student_note.split(" / ") if student_note else []:
+                if note not in notes:
+                    notes.append(note)
 
         codes = group["산인공코드"].dropna().unique()
         if len(codes) > 1:
@@ -101,11 +126,21 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             if not any("과정명이 없음" in n or "중복" in n for n in notes):
                 notes.append("같은 과정 안에 금액이 서로 다른 학생이 섞여 있어 금액 확인 필요")
 
+        session = ""
+        if existing is not None:
+            old = existing.get(sheet_key(company, course, start_date, end_date))
+            if old is None:
+                notes.append("추가 신청으로 새로 생긴 줄")
+            else:
+                session = old["교육회차"]
+                if old["인원"] != headcount:
+                    notes.append(f"추가 신청 반영(인원 {old['인원']}→{headcount})")
+
         out_rows.append({
             "기업명": company,
             "개강일": start_date,
             "교육종료일": end_date,
-            "교육회차": "",
+            "교육회차": session,
             "산인공코드": code,
             "과정명": course,
             "인원": headcount,

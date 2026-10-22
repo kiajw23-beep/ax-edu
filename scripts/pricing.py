@@ -65,6 +65,36 @@ def filter_excluded_rows(df: pd.DataFrame):
     return kept, int(mask.sum())
 
 
+DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"
+
+
+def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFrame:
+    """신청명단을 읽는다. added_path(추가 신청 파일)가 있으면 원본 뒤에 이어 붙인다.
+
+    내부용 칸 2개를 붙여서 돌려준다(결과 파일에는 나가지 않음):
+    - "_추가": 추가 신청 파일에서 온 줄이면 True
+    - "_중복메모": 추가 줄이 원본에 이미 있는 아이디+과정명이면 DUPLICATE_NOTE
+    필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
+    df = pd.read_excel(apply_path)
+    missing = [c for c in required_columns if c not in df.columns]
+    if missing:
+        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
+    df["_추가"] = False
+    df["_중복메모"] = ""
+    if not added_path:
+        return df
+
+    added = pd.read_excel(added_path)
+    missing = [c for c in required_columns if c not in added.columns]
+    if missing:
+        raise ValueError(f"추가 신청 파일에 다음 칸이 없습니다. 원본 신청명단과 같은 칸이어야 합니다: {missing}")
+    base_keys = {(normalize(i), normalize(c)) for i, c in zip(df["아이디"], df["신청과정명"])}
+    added["_추가"] = True
+    added["_중복메모"] = [DUPLICATE_NOTE if (normalize(i), normalize(c)) in base_keys else ""
+                         for i, c in zip(added["아이디"], added["신청과정명"])]
+    return pd.concat([df, added], ignore_index=True)
+
+
 # 이 회사 신청 건은 1·2·3단계 결과에서 항상 빼고, 필요하면 별도 파일로 만든다(tel_list.py).
 TEL_COMPANY_NAME = "도쿄일렉트론코리아"
 

@@ -26,7 +26,9 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import filter_excluded_rows, find_column, load_price_table, normalize, split_tel_rows  # noqa: E402
+from pricing import (  # noqa: E402
+    filter_excluded_rows, find_column, load_price_table, normalize, read_apply_list, split_tel_rows,
+)
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
 OUTPUT_COLUMNS = ["성함", "아이디", "과정명", "신청일", "교육시작일", "교육종료일", "학점", "교육비", "확인필요"]
@@ -58,11 +60,10 @@ def load_credit_table(path: str) -> dict:
     return table
 
 
-def run(apply_path: str, general_price_path: str, credit_path: str, output_path: str) -> dict:
-    df = pd.read_excel(apply_path)
-    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-    if missing:
-        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
+def run(apply_path: str, general_price_path: str, credit_path: str, output_path: str,
+        added_path: str = None) -> dict:
+    """added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 만든다."""
+    df = read_apply_list(apply_path, REQUIRED_COLUMNS, added_path)
 
     df, _ = filter_excluded_rows(df)
     _, tel_df = split_tel_rows(df)
@@ -74,7 +75,7 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
     for _, r in tel_df.iterrows():
         course = r["신청과정명"]
         course_norm = normalize(course)
-        notes = []
+        notes = [r["_중복메모"]] if r["_중복메모"] else []
 
         price = general_table.get(course_norm)
         tuition = None

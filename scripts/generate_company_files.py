@@ -24,7 +24,8 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, split_tel_rows,
+    classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
+    split_tel_rows,
 )
 
 REQUIRED_APPLY_COLUMNS = [
@@ -34,16 +35,16 @@ REQUIRED_APPLY_COLUMNS = [
 ]
 
 
-def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, out_dir: str) -> dict:
+def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, out_dir: str,
+        added_path: str = None) -> dict:
     """기업별 발송 파일들을 out_dir에 생성하고 요약 결과를 돌려준다.
+    added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합친 뒤, 추가 신청이 있는
+    기업의 파일만 만든다(그 기업의 기존 + 추가 신청이 모두 들어감).
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    df = pd.read_excel(apply_path)
-    missing = [c for c in REQUIRED_APPLY_COLUMNS if c not in df.columns]
-    if missing:
-        raise ValueError(f"신청명단 파일에 다음 칸이 없습니다: {missing}")
+    df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
     df, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
@@ -70,10 +71,15 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             "정부지원금": result["정부지원금"],
             "기업부담금": result["기업부담금"],
             "승인여부": "승인대기",
-            "확인필요": result["확인필요"],
+            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"]) if n),
+            "_추가": r["_추가"],
         })
 
     out_df = pd.DataFrame(rows)
+    if added_path:
+        added_companies = set(out_df.loc[out_df["_추가"], "기업명"])
+        out_df = out_df[out_df["기업명"].isin(added_companies)]
+    out_df = out_df.drop(columns=["_추가"])
     total_flagged = int((out_df["확인필요"] != "").sum())
 
     fill = PatternFill(start_color="FFF59D", end_color="FFF59D", fill_type="solid")
