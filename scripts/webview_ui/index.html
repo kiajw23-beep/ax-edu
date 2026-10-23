@@ -6,40 +6,63 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1>월별 개강 업무 도구</h1>
-    <p class="subtitle">이 프로그램은 인터넷에 아무것도 전송하지 않습니다. 전부 이 컴퓨터 안에서만 처리합니다.</p>
+<div class="frame">
+<div class="sheet">
+  <header class="sheet-header">
+    <div class="brand">
+      <span class="brand-mark">월</span>
+      <div class="brand-text">
+        <h1>월별 개강 업무 도구</h1>
+        <p class="subtitle">이 프로그램은 인터넷에 아무것도 전송하지 않습니다. 전부 이 컴퓨터 안에서만 처리합니다.</p>
+      </div>
+    </div>
   </header>
 
-  <section class="card">
-    <div class="file-row" data-slot="apply">
-      <label>① 신청명단</label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+  <section class="panel">
+    <h2 class="panel-title">신청 파일</h2>
+
+    <div class="field file-row" data-slot="apply">
+      <span class="field-icon">①</span>
+      <div class="field-body">
+        <label>신청명단</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="file-row" data-slot="refund">
-      <label>② 환급과정 커리큘럼</label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+    <div class="field file-row" data-slot="refund">
+      <span class="field-icon">②</span>
+      <div class="field-body">
+        <label>환급과정 커리큘럼</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="file-row" data-slot="general">
-      <label>③ 비환급 가격표</label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+    <div class="field file-row" data-slot="general">
+      <span class="field-icon">③</span>
+      <div class="field-body">
+        <label>비환급 가격표</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -48,49 +71,68 @@
       도쿄일렉트론코리아 별도 파일 저장
     </label>
 
-    <div class="file-row" data-slot="credit">
-      <label>④ 도쿄일렉트론코리아 학점 파일</label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+    <div class="field file-row" data-slot="credit">
+      <span class="field-icon">④</span>
+      <div class="field-body">
+        <label>도쿄일렉트론코리아 학점 파일</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
     <button type="button" id="run-all" class="btn primary full">실행 (저장 폴더 선택 후 전부 처리)</button>
   </section>
 
-  <section class="card">
-    <h2>개별 추가 신청 <span class="hint">(①②③ 파일도 함께 사용)</span></h2>
+  <section class="panel">
+    <div class="panel-head-row">
+      <h2 class="panel-title">개별 추가 신청</h2>
+      <span class="panel-hint">①②③ 파일도 함께 사용</span>
+    </div>
 
-    <div class="file-row" data-slot="added">
-      <label>⑤ 추가 신청 파일</label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+    <div class="field file-row" data-slot="added">
+      <span class="field-icon">⑤</span>
+      <div class="field-body">
+        <label>추가 신청 파일</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="file-row" data-slot="existing_gaegang">
-      <label>⑥ 기존 개강내역 파일 <span class="hint">(선택)</span></label>
-      <input type="text" readonly placeholder="파일을 선택하세요" />
-      <button type="button" class="btn pick">파일 선택</button>
-      <div class="recent-wrap">
-        <button type="button" class="btn recent">최근 ▾</button>
-        <div class="recent-menu hidden"></div>
+    <div class="field file-row" data-slot="existing_gaegang">
+      <span class="field-icon">⑥</span>
+      <div class="field-body">
+        <label>기존 개강내역 파일 (선택)</label>
+        <div class="field-controls">
+          <input type="text" readonly placeholder="파일을 선택하세요" />
+          <button type="button" class="btn secondary pick">파일 선택</button>
+          <div class="recent-wrap">
+            <button type="button" class="btn secondary recent">최근 ▾</button>
+            <div class="recent-menu hidden"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <button type="button" id="run-added" class="btn primary full">추가 신청 반영 (저장 폴더 선택)</button>
+    <button type="button" id="run-added" class="btn secondary full">추가 신청 반영 (저장 폴더 선택)</button>
   </section>
 
-  <section class="card">
-    <h2>처리 결과</h2>
+  <section class="panel log-panel">
+    <h2 class="panel-title">처리 결과</h2>
     <pre id="log"></pre>
   </section>
+</div>
 </div>
 
 <div id="modal-overlay" class="modal-overlay hidden">
