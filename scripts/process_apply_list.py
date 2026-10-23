@@ -73,8 +73,10 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         for ws_note, price_note, dup_note, add_note in zip(whitespace_notes, price_notes, df["_중복메모"], added_notes)
     ]
 
-    ordered_columns = ([c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]
-                        + ["기업명", "환급구분", "수강료", "정부지원금", "기업부담금", "확인필요"])
+    base_columns = [c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]
+    insert_at = base_columns.index("구분") + 1
+    ordered_columns = (base_columns[:insert_at] + ["기업명"] + base_columns[insert_at:]
+                        + ["환급구분", "수강료", "정부지원금", "기업부담금", "확인필요"])
     added_count = int(df["_추가"].sum())
     duplicate_count = int((df["_중복메모"] != "").sum())
     df = df[ordered_columns]
