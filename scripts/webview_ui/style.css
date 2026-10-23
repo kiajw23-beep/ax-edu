@@ -1,9 +1,8 @@
 :root {
-  --page-bg-1: #eef2ff;
-  --page-bg-2: #e0f2ff;
+  --page-bg: #eef1f7;
   --surface: #ffffff;
   --raised: #f6f8fc;
-  --border: #e6e9f2;
+  --border: #e9ecf3;
   --text: #1c2130;
   --muted: #6b7280;
   --faint: #9aa1b1;
@@ -17,13 +16,13 @@
   --header-grad-2: #2563eb;
 
   --radius-xl: 22px;
-  --radius-lg: 16px;
-  --radius-md: 10px;
+  --radius-lg: 18px;
+  --radius-md: 12px;
   --gap: 20px;
-  --pad: 26px;
-  --control-height: 38px;
+  --pad: 24px;
+  --control-height: 40px;
 
-  --fs-title: 21px;
+  --fs-title: 20px;
   --fs-section: 15px;
   --fs-body: 14px;
   --fs-small: 12.5px;
@@ -36,7 +35,7 @@
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
-  background: linear-gradient(160deg, var(--page-bg-1), var(--page-bg-2) 55%, #f4f6fb 100%);
+  background: var(--page-bg);
   color: var(--text);
   font-size: var(--fs-body);
   line-height: 1.5;
@@ -46,23 +45,29 @@ body {
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  padding: 36px 20px;
+  padding: 32px 20px;
 }
 
-.sheet {
+.stack {
   width: 100%;
-  max-width: 780px;
-  height: fit-content;
+  max-width: 740px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* 카드마다 각각 떠 있는 형태 (연결된 큰 시트가 아니라 개별 카드) */
+.card {
   background: var(--surface);
   border-radius: var(--radius-xl);
-  box-shadow: 0 24px 60px -24px rgba(37, 99, 235, 0.35), 0 2px 10px rgba(16, 24, 40, 0.06);
-  overflow: hidden;
+  box-shadow: 0 16px 40px -20px rgba(29, 41, 61, 0.18), 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
-.sheet-header {
-  padding: 26px var(--pad);
+.header-card {
+  padding: 22px var(--pad);
   background: linear-gradient(120deg, var(--header-grad-1), var(--header-grad-2));
   color: #fff;
+  box-shadow: 0 16px 36px -16px rgba(37, 99, 235, 0.45);
 }
 
 .brand {
@@ -75,7 +80,7 @@ body {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  border-radius: 13px;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
   display: flex;
@@ -101,11 +106,6 @@ body {
 
 .panel {
   padding: var(--pad);
-  border-top: 1px solid var(--border);
-}
-
-.sheet-header + .panel {
-  border-top: none;
 }
 
 .panel-head-row {
@@ -138,16 +138,21 @@ body {
   align-items: flex-start;
   gap: 14px;
   margin-bottom: 14px;
-  padding: 12px;
+  padding: 14px;
   border-radius: var(--radius-lg);
   background: var(--raised);
+  border: 1px solid var(--border);
+}
+
+.field:last-of-type {
+  margin-bottom: 0;
 }
 
 .field-icon {
   flex: 0 0 auto;
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -178,9 +183,9 @@ body {
   flex: 1;
   min-width: 0;
   height: var(--control-height);
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   background: var(--surface);
   color: var(--text);
   font-size: var(--fs-body);
@@ -193,8 +198,8 @@ body {
 
 .btn {
   height: var(--control-height);
-  padding: 0 14px;
-  border-radius: var(--radius-md);
+  padding: 0 16px;
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -203,7 +208,14 @@ body {
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: transform 0.05s ease, box-shadow 0.15s ease;
+}
+
+.btn svg {
+  flex: 0 0 auto;
 }
 
 .btn:hover {
@@ -251,8 +263,8 @@ body {
 .btn.full {
   width: 100%;
   margin-top: 10px;
-  height: 44px;
-  border-radius: 999px;
+  justify-content: center;
+  height: 46px;
   font-size: 15px;
 }
 
@@ -306,20 +318,17 @@ body {
   gap: 10px;
   font-size: var(--fs-body);
   font-weight: 500;
-  margin: 2px 0 16px;
+  margin: 0 0 14px;
   padding: 12px 14px;
   border-radius: var(--radius-lg);
   background: var(--raised);
+  border: 1px solid var(--border);
 }
 
 .checkbox-row input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
-}
-
-.log-panel {
-  background: var(--raised);
 }
 
 #log {
@@ -374,7 +383,6 @@ body {
 .modal .btn.primary {
   width: auto;
   height: var(--control-height);
-  border-radius: var(--radius-md);
 }
 
 /* 파일 선택 줄마다 다른 포인트 색을 줘서 한눈에 구분되게 함 */
@@ -389,7 +397,7 @@ body {
   .frame {
     padding: 16px;
   }
-  .panel {
+  .panel, .header-card {
     padding: 18px;
   }
   .field {
