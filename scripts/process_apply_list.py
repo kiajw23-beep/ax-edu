@@ -14,7 +14,7 @@ from openpyxl.styles import PatternFill
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
     added_note, classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
-    split_tel_rows,
+    split_tel_rows, style_worksheet,
 )
 
 REQUIRED_COLUMNS = [
@@ -24,9 +24,9 @@ REQUIRED_COLUMNS = [
 ]
 
 # 정리된 신청명단에는 필요 없어서 결과 파일에서 빼는 칸
-DROP_FROM_OUTPUT = ["신청ID", "결제수단", "결제일", "결제금액", "결제상태"]
+DROP_FROM_OUTPUT = ["신청ID", "출처", "회사명", "지사구분", "결제수단", "결제일", "결제금액", "결제상태"]
 
-WHITESPACE_CHECK_COLUMNS = ["회사명", "성함", "아이디", "휴대전화", "메일주소"]
+WHITESPACE_CHECK_COLUMNS = ["성함", "아이디", "휴대전화", "메일주소"]
 
 
 def has_whitespace_issue(value) -> bool:
@@ -89,6 +89,7 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         cell = ws.cell(row=row, column=check_col_idx)
         if cell.value:
             cell.fill = fill
+    style_worksheet(ws, currency_columns=["수강료", "정부지원금", "기업부담금"], text_columns=["아이디"])
     wb.save(output_path)
 
     # 5번 파일: 프리패스/테스트/카드결제 때문에 결과에서 빠진 신청 건만 모아서 따로 저장.
@@ -99,6 +100,10 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
     excluded_output_path = output_path.parent / f"5_제외된_신청명단{name_suffix}.xlsx"
     excluded_columns = [c for c in REQUIRED_COLUMNS if c in excluded_df.columns] + ["제외사유"]
     excluded_df[excluded_columns].to_excel(excluded_output_path, index=False, sheet_name="제외된_신청명단")
+
+    excluded_wb = load_workbook(excluded_output_path)
+    style_worksheet(excluded_wb["제외된_신청명단"], text_columns=["아이디"])
+    excluded_wb.save(excluded_output_path)
 
     total = len(df)
     refund_count = int((df["환급구분"] == "환급").sum())

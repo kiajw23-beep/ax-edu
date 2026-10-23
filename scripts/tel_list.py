@@ -28,6 +28,7 @@ from openpyxl.styles import PatternFill
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
     filter_excluded_rows, find_column, load_price_table, normalize, read_apply_list, split_tel_rows,
+    style_worksheet,
 )
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
@@ -115,6 +116,7 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
         cell = ws.cell(row=row_idx, column=check_col_idx)
         if cell.value:
             cell.fill = fill
+    style_worksheet(ws, currency_columns=["교육비"], text_columns=["아이디"])
     wb.save(output_path)
 
     return {

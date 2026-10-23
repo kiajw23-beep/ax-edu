@@ -12,9 +12,11 @@ process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
   (추측해서 채우지 않는다).
 """
 import re
+import unicodedata
 from datetime import date
 
 import pandas as pd
+from openpyxl.styles import Alignment
 
 COMPANY_SUFFIXES = ["주식회사", "(주)", "㈜", "유한회사", "유한책임회사", "합자회사", "합명회사"]
 
@@ -203,3 +205,49 @@ def classify_course(course_name, refund_table: dict, general_table: dict) -> dic
         "기업부담금": company_burden,
         "확인필요": note,
     }
+
+
+CURRENCY_FORMAT = "#,##0"
+TEXT_FORMAT = "@"
+_NO_WRAP = Alignment(wrap_text=False)
+
+
+def _display_width(value) -> float:
+    """한글은 영문보다 넓게 보이므로, 동아시아 넓은 글자를 2칸으로 센 길이를 돌려준다."""
+    width = 0
+    for ch in str(value):
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
+
+
+def style_worksheet(ws, currency_columns=(), text_columns=()):
+    """엑셀 결과 파일 공통 서식을 적용한다.
+    - currency_columns: 천단위 콤마(#,##0)로 표시할 칸 이름들
+    - text_columns: 텍스트 서식(@)으로 고정할 칸 이름들(예: 아이디)
+    - 모든 칸: 텍스트 줄바꿈 끄기 + 글자 길이에 맞춰 열 너비 자동 조정
+    """
+    headers = [c.value for c in ws[1]]
+    header_idx = {h: i + 1 for i, h in enumerate(headers) if h}
+
+    for col_name in currency_columns:
+        idx = header_idx.get(col_name)
+        if not idx:
+            continue
+        for row in range(2, ws.max_row + 1):
+            ws.cell(row=row, column=idx).number_format = CURRENCY_FORMAT
+
+    for col_name in text_columns:
+        idx = header_idx.get(col_name)
+        if not idx:
+            continue
+        for row in range(2, ws.max_row + 1):
+            ws.cell(row=row, column=idx).number_format = TEXT_FORMAT
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = _NO_WRAP
+
+    for col_cells in ws.columns:
+        letter = col_cells[0].column_letter
+        max_width = max((_display_width(c.value) for c in col_cells if c.value is not None), default=0)
+        ws.column_dimensions[letter].width = max_width + 2

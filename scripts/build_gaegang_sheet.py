@@ -28,7 +28,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
     classify_course, clean_company_name, filter_excluded_rows, load_price_table, normalize, read_apply_list,
-    split_tel_rows,
+    split_tel_rows, style_worksheet,
 )
 
 REQUIRED_APPLY_COLUMNS = [
@@ -164,6 +164,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         cell = ws.cell(row=row_idx, column=check_col_idx)
         if cell.value:
             cell.fill = fill
+    style_worksheet(ws, currency_columns=["단가 (1인기준)", "정부지원금", "기업부담금", "총 금액"])
     wb.save(output_path)
 
     total_rows = len(out_df)
