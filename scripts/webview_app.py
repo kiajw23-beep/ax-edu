@@ -51,7 +51,7 @@ import tel_list  # noqa: E402
 RECENT_FILES_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "월별개강업무도구" / "최근파일이력.json"
 MAX_RECENT_FILES = 3
 
-FILE_TYPES = ("엑셀/CSV 파일 (*.xlsx;*.xls;*.csv)", "모든 파일 (*.*)")
+FILE_TYPES = ("엑셀 CSV 파일 (*.xlsx;*.xls;*.csv)", "모든 파일 (*.*)")
 
 
 def _resource_path(*parts) -> Path:
