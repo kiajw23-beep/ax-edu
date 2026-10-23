@@ -12,6 +12,7 @@ process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
   (추측해서 채우지 않는다).
 """
 import re
+from datetime import date
 
 import pandas as pd
 
@@ -74,6 +75,11 @@ def filter_excluded_rows(df: pd.DataFrame):
 
 
 DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"
+
+
+def added_note(is_added: bool) -> str:
+    """추가 신청으로 들어온 줄이면 "YYYY-MM-DD 추가 신청" 메모를, 아니면 빈 문자열을 돌려준다."""
+    return f"{date.today().isoformat()} 추가 신청" if is_added else ""
 
 
 def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFrame:

@@ -24,7 +24,7 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
+    added_note, classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
     split_tel_rows,
 )
 
@@ -71,7 +71,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             "정부지원금": result["정부지원금"],
             "기업부담금": result["기업부담금"],
             "승인여부": "승인대기",
-            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"]) if n),
+            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"], added_note(r["_추가"])) if n),
             "_추가": r["_추가"],
         })
 

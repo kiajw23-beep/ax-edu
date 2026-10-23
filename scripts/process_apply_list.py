@@ -13,7 +13,7 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
+    added_note, classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
     split_tel_rows,
 )
 
@@ -67,9 +67,10 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         return (", ".join(issues) + " 공백 확인필요") if issues else ""
 
     whitespace_notes = df.apply(whitespace_note, axis=1)
+    added_notes = df["_추가"].apply(added_note)
     df["확인필요"] = [
-        " / ".join(n for n in (ws_note, price_note, dup_note) if n)
-        for ws_note, price_note, dup_note in zip(whitespace_notes, price_notes, df["_중복메모"])
+        " / ".join(n for n in (ws_note, price_note, dup_note, add_note) if n)
+        for ws_note, price_note, dup_note, add_note in zip(whitespace_notes, price_notes, df["_중복메모"], added_notes)
     ]
 
     ordered_columns = ([c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]
