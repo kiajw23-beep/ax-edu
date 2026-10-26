@@ -2,7 +2,7 @@
 """매달 받는 전체 신청명단 raw data를 정리된 양식으로 변환한다.
 
 사용법:
-    python3 scripts/process_apply_list.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>
+    python3 scripts/process_apply_list.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력파일.xlsx>
 """
 import sys
 from pathlib import Path
@@ -129,7 +129,7 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
 def main():
     if len(sys.argv) != 5:
         print("사용법: python3 scripts/process_apply_list.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>")
+              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력파일.xlsx>")
         sys.exit(1)
 
     apply_list_path, refund_curriculum_path, general_price_path, output_path = sys.argv[1:5]

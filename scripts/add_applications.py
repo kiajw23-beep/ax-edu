@@ -2,7 +2,7 @@
 """개별로 더 들어온 신청(추가 신청 파일)을 기존 결과에 반영한다.
 
 사용법:
-    python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx 또는 ""> <출력폴더> [학점파일.xlsx]
+    python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <기존_개강내역.xlsx 또는 ""> <출력폴더> [학점파일.xlsx]
 
 - 추가 신청 파일은 원본 신청명단과 같은 칸이어야 한다.
 - 1단계 신청명단: 원본 + 추가를 합쳐 새 이름(1_정리된_신청명단_추가_월일_시분.xlsx)으로 저장. 기존 파일은 그대로.
@@ -85,7 +85,7 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
 def main():
     if len(sys.argv) not in (7, 8):
         print("사용법: python3 scripts/add_applications.py <원본신청명단.xlsx> <추가신청.xlsx> "
-              "<환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <기존_개강내역.xlsx 또는 \"\"> <출력폴더> [학점파일.xlsx]")
+              "<환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <기존_개강내역.xlsx 또는 \"\"> <출력폴더> [학점파일.xlsx]")
         sys.exit(1)
     run(*sys.argv[1:7], credit_path=sys.argv[7] if len(sys.argv) == 8 else None)
 

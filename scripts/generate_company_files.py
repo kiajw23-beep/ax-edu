@@ -2,11 +2,11 @@
 """매달 받는 전체 신청명단을 기업별 발송용 파일로 나눠 생성한다.
 
 사용법:
-    python3 scripts/generate_company_files.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력폴더>
+    python3 scripts/generate_company_files.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력폴더>
 
 규칙:
-- 과정명이 환급과정 커리큘럼에 있으면 "환급"(과정유형: 사업주), 없고 비환급
-  가격표에만 있으면 "비환급"(과정유형: 일반)으로 표기한다.
+- 과정명이 환급과정 커리큘럼에 있으면 "환급"(과정유형: 사업주), 없고
+  비환급과정 커리큘럼에만 있으면 "비환급"(과정유형: 일반)으로 표기한다.
 - 양쪽 리스트에 모두 있는 과정은 "환급"으로 표기하고, 금액도 환급과정 쪽
   금액을 쓴다. 이 경우 "확인필요" 칸에 전환 사실을 남긴다.
 - 비환급 과정은 정부지원금이 없으므로 기업부담금 = 수강료 전액으로 계산한다.
@@ -115,7 +115,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
 def main():
     if len(sys.argv) != 5:
         print("사용법: python3 scripts/generate_company_files.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력폴더>")
+              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력폴더>")
         sys.exit(1)
 
     apply_path, refund_curriculum_path, general_price_path, out_dir = sys.argv[1:5]

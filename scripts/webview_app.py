@@ -5,7 +5,7 @@
 기존 스크립트 그대로 쓴다. 이 파일은 화면(로컬 HTML/CSS/JS, webview_ui/)과
 파일 대화상자·실행 흐름만 담당한다.
 
-신청명단 / 환급과정 커리큘럼 / 비환급 가격표, 3개 파일을 고르고 "실행"을
+신청명단 / 환급과정 커리큘럼 / 비환급과정 커리큘럼, 3개 파일을 고르고 "실행"을
 누르면 저장 폴더를 고른 뒤 아래 결과를 한 번에 만든다.
     1_정리된_신청명단.xlsx
     2_기업별발송/ (기업별 파일들)
@@ -124,7 +124,7 @@ class Api:
         credit_path = paths.get("credit", "")
 
         if not (apply_path and refund_path and general_path):
-            return {"ok": False, "message": "신청명단 / 환급과정 커리큘럼 / 비환급 가격표, 3개 파일을 모두 골라야 합니다."}
+            return {"ok": False, "message": "신청명단 / 환급과정 커리큘럼 / 비환급과정 커리큘럼, 3개 파일을 모두 골라야 합니다."}
         if save_tel and not credit_path:
             return {"ok": False, "message": "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다."}
 
@@ -193,7 +193,7 @@ class Api:
         existing_gaegang_path = paths.get("existing_gaegang", "")
 
         if not (apply_path and refund_path and general_path and added_path):
-            return {"ok": False, "message": "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급 가격표 / "
+            return {"ok": False, "message": "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼 / "
                                              "⑤ 추가 신청 파일을 모두 골라야 합니다. "
                                              "⑥ 기존 개강내역 파일은 선택사항입니다."}
         if save_tel and not credit_path:

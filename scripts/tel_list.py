@@ -2,7 +2,7 @@
 """신청명단에서 도쿄일렉트론코리아 소속 신청 건만 모아 별도 파일로 만든다.
 
 사용법:
-    python3 scripts/tel_list.py <신청명단.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>
+    python3 scripts/tel_list.py <신청명단.xlsx> <비환급과정_커리큘럼.xlsx> <학점파일.xlsx> <출력파일.xlsx>
 
 출력 칸(사용자가 지정한 순서 그대로):
     성함, 아이디, 과정명, 신청일, 교육시작일, 교육종료일, 학점, 교육비, 확인필요
@@ -14,8 +14,8 @@
 - 학점: 신청과정명을 학점 파일의 과정명 칸들("과정명", "최종 과정명", 제목 없는 칸)과
   공백 차이만 보정해 그대로 대조한다. 못 찾거나 같은 이름이 서로 다른 학점으로
   중복돼 있으면 비워두고 확인필요로 표시한다.
-- 교육비: 환급과정 여부와 관계없이 무조건 비환급 가격표의 1인 수강료를 쓴다.
-  비환급 가격표에 과정명이 없거나 서로 다른 금액으로 중복돼 있으면 비워두고
+- 교육비: 환급과정 여부와 관계없이 무조건 비환급과정 커리큘럼의 1인 수강료를 쓴다.
+  비환급과정 커리큘럼에 과정명이 없거나 서로 다른 금액으로 중복돼 있으면 비워두고
   확인필요로 표시한다.
 """
 import sys
@@ -81,9 +81,9 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
         price = general_table.get(course_norm)
         tuition = None
         if price is None:
-            notes.append("비환급 가격표에 과정명이 없음 - 교육비 확인 필요")
+            notes.append("비환급과정 커리큘럼에 과정명이 없음 - 교육비 확인 필요")
         elif price.get("중복"):
-            notes.append("비환급 가격표에 같은 과정명이 서로 다른 금액으로 중복 등록 - 교육비 확인 필요")
+            notes.append("비환급과정 커리큘럼에 같은 과정명이 서로 다른 금액으로 중복 등록 - 교육비 확인 필요")
         else:
             tuition = price["수강료"]
 
@@ -129,7 +129,7 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
 def main():
     if len(sys.argv) != 5:
         print("사용법: python3 scripts/tel_list.py "
-              "<신청명단.xlsx> <비환급_가격표.xlsx> <학점파일.xlsx> <출력파일.xlsx>")
+              "<신청명단.xlsx> <비환급과정_커리큘럼.xlsx> <학점파일.xlsx> <출력파일.xlsx>")
         sys.exit(1)
 
     try:
