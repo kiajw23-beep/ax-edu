@@ -41,8 +41,8 @@ EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
 
 def exclusion_reason(row) -> str:
     """출처에 '프리패스'가 들어있거나, 신청과정명에 '카드결제'(띄어쓰기 무관)가
-    들어있거나, 아이디/회사명에 '테스트'/'test'가 들어간 신청 건이면 그 사유를
-    돌려주고, 아니면 빈 문자열을 돌려준다."""
+    들어있거나, 아이디/회사명에 '테스트'/'test'가 들어있거나, 신청상태가
+    '취소'인 신청 건이면 그 사유를 돌려주고, 아니면 빈 문자열을 돌려준다."""
     source = normalize(row.get("출처", ""))
     if "프리패스" in source:
         return "프리패스"
@@ -54,6 +54,8 @@ def exclusion_reason(row) -> str:
     for keyword in EXCLUDE_TEST_KEYWORDS:
         if keyword in id_text or keyword in company_text:
             return "테스트"
+    if normalize(row.get("신청상태", "")) == "취소":
+        return "취소"
     return ""
 
 
