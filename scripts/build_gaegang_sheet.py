@@ -2,7 +2,7 @@
 """매달 받는 전체 신청명단을 "개강내역시트"에 채울 내용(기업·과정별 집계)으로 만든다.
 
 사용법:
-    python3 scripts/build_gaegang_sheet.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>
+    python3 scripts/build_gaegang_sheet.py <신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력파일.xlsx>
 
 출력 칸(사용자가 지정한 순서 그대로):
     기업명, 개강일, 교육종료일, 교육회차, 산인공코드, 과정명, 인원,
@@ -12,7 +12,7 @@
 - 기업명 + 과정명 + 개강일 + 교육종료일이 같은 신청 건을 하나의 줄로 묶는다
   (인원 = 그 줄에 묶인 학생 수).
 - 단가(1인기준)/정부지원금/기업부담금 계산 규칙은 generate_company_files.py와 동일
-  (환급·비환급 가격표 대조, 양쪽에 다 있으면 환급 우선 + 확인필요 메모).
+  (환급·비환급과정 커리큘럼 대조, 양쪽에 다 있으면 환급 우선 + 확인필요 메모).
   정부지원금/기업부담금/총 금액은 인원을 곱한 "그룹 합계" 금액이다.
 - 교육회차 칸은 이 도구가 알 수 없는 정보라 비워둔다(사용자가 직접 채움). 추가 신청 반영 시
   기존 개강내역 파일에 채워둔 교육회차는 그대로 옮긴다.
@@ -34,7 +34,7 @@ from pricing import (  # noqa: E402
 REQUIRED_APPLY_COLUMNS = [
     "순번", "신청ID", "구분", "출처", "회사명", "지사구분", "성함", "아이디",
     "생년월일", "휴대전화", "메일주소", "산인공코드", "신청과정명",
-    "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태",
+    "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태", "신청상태",
 ]
 
 OUTPUT_COLUMNS = [
@@ -183,7 +183,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
 def main():
     if len(sys.argv) != 5:
         print("사용법: python3 scripts/build_gaegang_sheet.py "
-              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급_가격표.xlsx> <출력파일.xlsx>")
+              "<신청명단.xlsx> <환급과정_커리큘럼.xlsx> <비환급과정_커리큘럼.xlsx> <출력파일.xlsx>")
         sys.exit(1)
 
     apply_path, refund_curriculum_path, general_price_path, output_path = sys.argv[1:5]

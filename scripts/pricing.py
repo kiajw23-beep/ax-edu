@@ -1,10 +1,10 @@
-"""신청명단의 과정명을 환급/비환급 가격표와 대조해 금액을 계산하는 공통 로직.
+"""신청명단의 과정명을 환급/비환급과정 커리큘럼와 대조해 금액을 계산하는 공통 로직.
 
 process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
 공통으로 사용한다. 금액 관련 규칙은 모두 사용자가 직접 확인해준 내용이다:
 
 - 과정명이 환급과정 커리큘럼에 있으면 "환급"(과정유형: 사업주).
-- 없고 비환급 가격표에만 있으면 "비환급"(과정유형: 일반).
+- 없고 비환급과정 커리큘럼에만 있으면 "비환급"(과정유형: 일반).
 - 양쪽에 모두 있으면 "환급"으로 표기하고 금액도 환급 쪽 금액을 쓴다. 이 경우
   "일반 -> 환급" 메모를 남긴다.
 - 비환급 과정은 정부지원금이 없으므로 기업부담금 = 수강료 전액.
@@ -41,8 +41,8 @@ EXCLUDE_TEST_KEYWORDS = ["테스트", "test"]
 
 def exclusion_reason(row) -> str:
     """출처에 '프리패스'가 들어있거나, 신청과정명에 '카드결제'(띄어쓰기 무관)가
-    들어있거나, 아이디/회사명에 '테스트'/'test'가 들어간 신청 건이면 그 사유를
-    돌려주고, 아니면 빈 문자열을 돌려준다."""
+    들어있거나, 아이디/회사명에 '테스트'/'test'가 들어있거나, 신청상태가
+    '취소'인 신청 건이면 그 사유를 돌려주고, 아니면 빈 문자열을 돌려준다."""
     source = normalize(row.get("출처", ""))
     if "프리패스" in source:
         return "프리패스"
@@ -54,6 +54,8 @@ def exclusion_reason(row) -> str:
     for keyword in EXCLUDE_TEST_KEYWORDS:
         if keyword in id_text or keyword in company_text:
             return "테스트"
+    if normalize(row.get("신청상태", "")) == "취소":
+        return "취소"
     return ""
 
 
