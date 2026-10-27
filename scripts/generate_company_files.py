@@ -55,7 +55,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
     rows = []
     for _, r in df.iterrows():
         course = r["신청과정명"]
-        result = classify_course(course, refund_table, general_table)
+        result = classify_course(course, refund_table, general_table, r["구분"])
 
         rows.append({
             "기업명": clean_company_name(r["회사명"]),

@@ -55,7 +55,9 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
 
     df["기업명"] = df["회사명"].apply(clean_company_name)
 
-    price_results = df["신청과정명"].apply(lambda course: classify_course(course, refund_table, general_table))
+    price_results = df.apply(
+        lambda r: classify_course(r["신청과정명"], refund_table, general_table, r["구분"]), axis=1
+    )
     df["환급구분"] = price_results.apply(lambda r: r["환급구분"])
     df["수강료"] = price_results.apply(lambda r: r["수강료"])
     df["정부지원금"] = price_results.apply(lambda r: r["정부지원금"])

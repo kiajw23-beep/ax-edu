@@ -1,12 +1,14 @@
-"""신청명단의 과정명을 환급/비환급과정 커리큘럼와 대조해 금액을 계산하는 공통 로직.
+"""신청명단의 과정명을 환급/비환급과정 커리큘럼과 대조해 금액을 계산하는 공통 로직.
 
 process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
 공통으로 사용한다. 금액 관련 규칙은 모두 사용자가 직접 확인해준 내용이다:
 
 - 과정명이 환급과정 커리큘럼에 있으면 "환급"(과정유형: 사업주).
 - 없고 비환급과정 커리큘럼에만 있으면 "비환급"(과정유형: 일반).
-- 양쪽에 모두 있으면 "환급"으로 표기하고 금액도 환급 쪽 금액을 쓴다. 이 경우
-  "일반 -> 환급" 메모를 남긴다.
+- 양쪽에 모두 있으면 항상 "환급"으로 표기하고 금액도 환급 쪽 금액을 쓴다. 이때
+  신청명단의 "구분" 칸에 "일반"이 들어있어 실제로 비환급으로 신청한 경우에만
+  "비환급 -> 환급으로 변경" 메모를 남긴다(원래부터 환급/사업주로 신청했으면
+  메모를 남기지 않는다).
 - 비환급 과정은 정부지원금이 없으므로 기업부담금 = 수강료 전액.
 - 어느 쪽에서도 과정명을 찾지 못하면 금액을 비우고 확인필요로만 표시한다
   (추측해서 채우지 않는다).
@@ -157,8 +159,14 @@ def load_price_table(path: str) -> dict:
     return table
 
 
-def classify_course(course_name, refund_table: dict, general_table: dict) -> dict:
+def classify_course(course_name, refund_table: dict, general_table: dict, application_type: str = "") -> dict:
     """1인 기준 과정 분류·금액을 계산해 돌려준다.
+
+    application_type: 신청명단의 "구분" 칸 값. 여기에 "일반"이 들어있으면 학생이
+    실제로 비환급(일반)으로 신청했다는 뜻이다. 과정명이 환급·비환급 양쪽 커리큘럼에
+    모두 있으면 항상 "환급"으로 처리하되, 실제로 비환급으로 신청한 경우에만
+    "비환급 -> 환급으로 변경" 메모를 남긴다(원래부터 환급/사업주로 신청했으면
+    양쪽에 다 있어도 전환된 게 아니므로 메모를 남기지 않는다).
 
     반환값: {"환급구분", "과정유형", "수강료", "정부지원금", "기업부담금", "확인필요"}
     가격을 알 수 없으면 "수강료"/"정부지원금"/"기업부담금"은 None이다.
@@ -166,14 +174,15 @@ def classify_course(course_name, refund_table: dict, general_table: dict) -> dic
     course_norm = normalize(course_name)
     in_refund = course_norm in refund_table
     in_general = course_norm in general_table
+    applied_as_general = "일반" in normalize(application_type)
 
     note = ""
     if in_refund:
         price = refund_table[course_norm]
         course_type = "사업주"
         refund_flag = "환급"
-        if in_general:
-            note = "일반 -> 환급"
+        if in_general and applied_as_general:
+            note = "비환급 -> 환급으로 변경"
     elif in_general:
         price = general_table[course_norm]
         course_type = "일반"

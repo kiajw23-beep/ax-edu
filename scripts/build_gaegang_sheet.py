@@ -80,7 +80,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
 
     per_student = []
     for _, r in df.iterrows():
-        result = classify_course(r["신청과정명"], refund_table, general_table)
+        result = classify_course(r["신청과정명"], refund_table, general_table, r["구분"])
         per_student.append({
             "기업명": clean_company_name(r["회사명"]),
             "개강일": r["교육시작일"],
