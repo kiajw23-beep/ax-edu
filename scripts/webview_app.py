@@ -35,17 +35,13 @@ exe로 만드는 법(윈도우 PC에서):
 import json
 import os
 import sys
-import traceback
 from pathlib import Path
 
 import webview
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import process_apply_list  # noqa: E402
-import generate_company_files  # noqa: E402
 import add_applications  # noqa: E402
-import build_gaegang_sheet  # noqa: E402
-import tel_list  # noqa: E402
+import run_steps  # noqa: E402
 
 # 각 파일 선택 줄에서 최근 고른 파일 경로를 기억해두는 곳(파일칸 종류별로 따로 저장).
 RECENT_FILES_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "월별개강업무도구" / "최근파일이력.json"
@@ -138,55 +134,8 @@ class Api:
         out_dir = Path(out_dir_str)
 
         self._clear_log()
-        if start_date or end_date:
-            self._log(f"기간 필터: 교육시작일 {start_date or '처음'} ~ {end_date or '끝'} 만 처리합니다.")
-        self._log("=== 1단계: 신청명단 정리 ===")
-        try:
-            r1 = process_apply_list.run(apply_path, refund_path, general_path, out_dir / "1_정리된_신청명단.xlsx",
-                                        start_date=start_date, end_date=end_date)
-            date_note = f", 선택한 기간 밖 {r1['date_filtered']}건 제외" if r1["date_filtered"] else ""
-            self._log(f"완료: 총 {r1['total']}건 (프리패스/테스트/카드결제 {r1['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r1['tel_excluded']}건 제외{date_note}) / "
-                      f"환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
-            self._log(f"결과 파일: {r1['output_path']}")
-            self._log(f"제외된 신청명단 파일: {r1['excluded_output_path']}")
-        except Exception:
-            self._log("[오류] 1단계 실패:\n" + traceback.format_exc())
-
-        self._log("\n=== 2단계: 기업별 발송 파일 생성 ===")
-        try:
-            r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송",
-                                             start_date=start_date, end_date=end_date)
-            for f in r2["files"]:
-                self._log(f"생성: {f['path']} ({f['count']}명)")
-            date_note = f", 선택한 기간 밖 {r2['date_filtered']}건 제외" if r2["date_filtered"] else ""
-            self._log(f"완료: 총 {r2['total']}건 (프리패스/테스트/카드결제 {r2['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r2['tel_excluded']}건 제외{date_note}) / "
-                      f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
-        except Exception:
-            self._log("[오류] 2단계 실패:\n" + traceback.format_exc())
-
-        self._log("\n=== 3단계: 개강내역시트 작성 내용 생성 ===")
-        try:
-            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, out_dir / "3_개강내역.xlsx",
-                                         start_date=start_date, end_date=end_date)
-            date_note = f", 선택한 기간 밖 {r3['date_filtered']}건 제외" if r3["date_filtered"] else ""
-            self._log(f"완료: 개강내역 {r3['rows']}줄 (신청 {r3['students']}건을 묶음, "
-                      f"프리패스/테스트/카드결제 {r3['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r3['tel_excluded']}건 제외{date_note}) / 확인필요 {r3['flagged']}줄")
-            self._log(f"결과 파일: {r3['output_path']}")
-        except Exception:
-            self._log("[오류] 3단계 실패:\n" + traceback.format_exc())
-
-        if save_tel:
-            self._log("\n=== 도쿄일렉트론코리아 별도 파일 ===")
-            try:
-                r4 = tel_list.run(apply_path, general_path, credit_path, out_dir / "4_도쿄일렉트론코리아.xlsx",
-                                  start_date=start_date, end_date=end_date)
-                self._log(f"완료: {r4['total']}건 / 확인필요 {r4['flagged']}건")
-                self._log(f"결과 파일: {r4['output_path']}")
-            except Exception:
-                self._log("[오류] 도쿄일렉트론코리아 파일 생성 실패:\n" + traceback.format_exc())
+        run_steps.run_all(apply_path, refund_path, general_path, credit_path, out_dir, save_tel,
+                          start_date=start_date, end_date=end_date, log=self._log)
 
         self._log(f"\n모든 작업이 끝났습니다. 저장 위치: {out_dir}")
         self._clear_fields()
