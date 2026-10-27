@@ -122,11 +122,15 @@ class Api:
         refund_path = paths.get("refund", "")
         general_path = paths.get("general", "")
         credit_path = paths.get("credit", "")
+        start_date = paths.get("start_date") or None
+        end_date = paths.get("end_date") or None
 
         if not (apply_path and refund_path and general_path):
             return {"ok": False, "message": "신청명단 / 환급과정 커리큘럼 / 비환급과정 커리큘럼, 3개 파일을 모두 골라야 합니다."}
         if save_tel and not credit_path:
             return {"ok": False, "message": "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다."}
+        if start_date and end_date and start_date > end_date:
+            return {"ok": False, "message": "교육시작일 기간이 올바르지 않습니다. 시작일이 종료일보다 늦습니다."}
 
         out_dir_str = self._pick_directory()
         if not out_dir_str:
@@ -134,11 +138,15 @@ class Api:
         out_dir = Path(out_dir_str)
 
         self._clear_log()
+        if start_date or end_date:
+            self._log(f"기간 필터: 교육시작일 {start_date or '처음'} ~ {end_date or '끝'} 만 처리합니다.")
         self._log("=== 1단계: 신청명단 정리 ===")
         try:
-            r1 = process_apply_list.run(apply_path, refund_path, general_path, out_dir / "1_정리된_신청명단.xlsx")
+            r1 = process_apply_list.run(apply_path, refund_path, general_path, out_dir / "1_정리된_신청명단.xlsx",
+                                        start_date=start_date, end_date=end_date)
+            date_note = f", 선택한 기간 밖 {r1['date_filtered']}건 제외" if r1["date_filtered"] else ""
             self._log(f"완료: 총 {r1['total']}건 (프리패스/테스트/카드결제 {r1['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r1['tel_excluded']}건 제외) / "
+                      f"도쿄일렉트론코리아 {r1['tel_excluded']}건 제외{date_note}) / "
                       f"환급 {r1['refund']}건 / 비환급 {r1['nonrefund']}건 / 확인필요 {r1['flagged']}건")
             self._log(f"결과 파일: {r1['output_path']}")
             self._log(f"제외된 신청명단 파일: {r1['excluded_output_path']}")
@@ -147,21 +155,25 @@ class Api:
 
         self._log("\n=== 2단계: 기업별 발송 파일 생성 ===")
         try:
-            r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송")
+            r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송",
+                                             start_date=start_date, end_date=end_date)
             for f in r2["files"]:
                 self._log(f"생성: {f['path']} ({f['count']}명)")
+            date_note = f", 선택한 기간 밖 {r2['date_filtered']}건 제외" if r2["date_filtered"] else ""
             self._log(f"완료: 총 {r2['total']}건 (프리패스/테스트/카드결제 {r2['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r2['tel_excluded']}건 제외) / "
+                      f"도쿄일렉트론코리아 {r2['tel_excluded']}건 제외{date_note}) / "
                       f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
         except Exception:
             self._log("[오류] 2단계 실패:\n" + traceback.format_exc())
 
         self._log("\n=== 3단계: 개강내역시트 작성 내용 생성 ===")
         try:
-            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, out_dir / "3_개강내역.xlsx")
+            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, out_dir / "3_개강내역.xlsx",
+                                         start_date=start_date, end_date=end_date)
+            date_note = f", 선택한 기간 밖 {r3['date_filtered']}건 제외" if r3["date_filtered"] else ""
             self._log(f"완료: 개강내역 {r3['rows']}줄 (신청 {r3['students']}건을 묶음, "
                       f"프리패스/테스트/카드결제 {r3['excluded']}건, "
-                      f"도쿄일렉트론코리아 {r3['tel_excluded']}건 제외) / 확인필요 {r3['flagged']}줄")
+                      f"도쿄일렉트론코리아 {r3['tel_excluded']}건 제외{date_note}) / 확인필요 {r3['flagged']}줄")
             self._log(f"결과 파일: {r3['output_path']}")
         except Exception:
             self._log("[오류] 3단계 실패:\n" + traceback.format_exc())
@@ -169,7 +181,8 @@ class Api:
         if save_tel:
             self._log("\n=== 도쿄일렉트론코리아 별도 파일 ===")
             try:
-                r4 = tel_list.run(apply_path, general_path, credit_path, out_dir / "4_도쿄일렉트론코리아.xlsx")
+                r4 = tel_list.run(apply_path, general_path, credit_path, out_dir / "4_도쿄일렉트론코리아.xlsx",
+                                  start_date=start_date, end_date=end_date)
                 self._log(f"완료: {r4['total']}건 / 확인필요 {r4['flagged']}건")
                 self._log(f"결과 파일: {r4['output_path']}")
             except Exception:
@@ -191,6 +204,8 @@ class Api:
         credit_path = paths.get("credit", "")
         added_path = paths.get("added", "")
         existing_gaegang_path = paths.get("existing_gaegang", "")
+        start_date = paths.get("start_date") or None
+        end_date = paths.get("end_date") or None
 
         if not (apply_path and refund_path and general_path and added_path):
             return {"ok": False, "message": "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼 / "
@@ -198,6 +213,8 @@ class Api:
                                              "⑥ 기존 개강내역 파일은 선택사항입니다."}
         if save_tel and not credit_path:
             return {"ok": False, "message": "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다."}
+        if start_date and end_date and start_date > end_date:
+            return {"ok": False, "message": "교육시작일 기간이 올바르지 않습니다. 시작일이 종료일보다 늦습니다."}
 
         out_dir_str = self._pick_directory()
         if not out_dir_str:
@@ -205,8 +222,11 @@ class Api:
         out_dir = Path(out_dir_str)
 
         self._clear_log()
+        if start_date or end_date:
+            self._log(f"기간 필터: 교육시작일 {start_date or '처음'} ~ {end_date or '끝'} 만 처리합니다.")
         add_applications.run(apply_path, added_path, refund_path, general_path, existing_gaegang_path, out_dir,
-                             credit_path=credit_path if save_tel else None, log=self._log)
+                             credit_path=credit_path if save_tel else None, log=self._log,
+                             start_date=start_date, end_date=end_date)
 
         gaegang_msg = ("개강내역은 고른 파일을 갱신했습니다." if existing_gaegang_path
                        else "⑥을 고르지 않아 개강내역은 새 파일로 만들었고, 교육회차는 비어 있습니다.")

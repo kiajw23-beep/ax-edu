@@ -81,6 +81,8 @@
 
   window.clearFileFields = function () {
     Object.keys(rows).forEach((slot) => setFieldValue(slot, ""));
+    document.getElementById("date-start").value = "";
+    document.getElementById("date-end").value = "";
   };
 
   const logEl = document.getElementById("log");
@@ -106,6 +108,8 @@
   }
 
   const saveTelCheckbox = document.getElementById("save-tel");
+  const dateStartInput = document.getElementById("date-start");
+  const dateEndInput = document.getElementById("date-end");
   const runAllBtn = document.getElementById("run-all");
   const runAddedBtn = document.getElementById("run-added");
 
@@ -114,10 +118,14 @@
     runAddedBtn.disabled = disabled;
   }
 
+  function withDateRange() {
+    return { ...state, start_date: dateStartInput.value, end_date: dateEndInput.value };
+  }
+
   runAllBtn.addEventListener("click", async () => {
     setButtonsDisabled(true);
     try {
-      const result = await callApi(() => window.pywebview.api.run_all({ ...state }, saveTelCheckbox.checked));
+      const result = await callApi(() => window.pywebview.api.run_all(withDateRange(), saveTelCheckbox.checked));
       if (result && result.message) {
         showModal(result.ok ? "완료" : "알려드립니다", result.message);
       }
@@ -129,7 +137,7 @@
   runAddedBtn.addEventListener("click", async () => {
     setButtonsDisabled(true);
     try {
-      const result = await callApi(() => window.pywebview.api.run_added({ ...state }, saveTelCheckbox.checked));
+      const result = await callApi(() => window.pywebview.api.run_added(withDateRange(), saveTelCheckbox.checked));
       if (result && result.message) {
         showModal(result.ok ? "완료" : "알려드립니다", result.message);
       }

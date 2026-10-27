@@ -27,8 +27,8 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    filter_excluded_rows, find_column, load_price_table, normalize, read_apply_list, split_tel_rows,
-    style_worksheet,
+    filter_by_date_range, filter_excluded_rows, find_column, load_price_table, normalize, read_apply_list,
+    split_tel_rows, style_worksheet,
 )
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
@@ -62,10 +62,13 @@ def load_credit_table(path: str) -> dict:
 
 
 def run(apply_path: str, general_price_path: str, credit_path: str, output_path: str,
-        added_path: str = None) -> dict:
-    """added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 만든다."""
+        added_path: str = None, start_date: str = None, end_date: str = None) -> dict:
+    """added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 만든다.
+    start_date/end_date를 주면 교육시작일이 그 기간 안에 있는 신청 건만 처리한다
+    (둘 다 비어 있으면 전체 기간을 처리)."""
     df = read_apply_list(apply_path, REQUIRED_COLUMNS, added_path)
 
+    df, _ = filter_by_date_range(df, start_date, end_date)
     df, _, _ = filter_excluded_rows(df)
     _, tel_df = split_tel_rows(df)
 

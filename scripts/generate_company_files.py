@@ -24,8 +24,8 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    added_note, classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
-    split_tel_rows, style_worksheet,
+    added_note, classify_course, clean_company_name, filter_by_date_range, filter_excluded_rows, load_price_table,
+    read_apply_list, split_tel_rows, style_worksheet,
 )
 
 REQUIRED_APPLY_COLUMNS = [
@@ -36,16 +36,19 @@ REQUIRED_APPLY_COLUMNS = [
 
 
 def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, out_dir: str,
-        added_path: str = None) -> dict:
+        added_path: str = None, start_date: str = None, end_date: str = None) -> dict:
     """기업별 발송 파일들을 out_dir에 생성하고 요약 결과를 돌려준다.
     added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합친 뒤, 추가 신청이 있는
     기업의 파일만 만든다(그 기업의 기존 + 추가 신청이 모두 들어감).
+    start_date/end_date를 주면 교육시작일이 그 기간 안에 있는 신청 건만 처리한다
+    (둘 다 비어 있으면 전체 기간을 처리).
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
+    df, date_filtered_count = filter_by_date_range(df, start_date, end_date)
     df, _, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
@@ -108,6 +111,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         "flagged": total_flagged,
         "excluded": excluded_count,
         "tel_excluded": len(tel_df),
+        "date_filtered": date_filtered_count,
         "files": created_files,
     }
 
@@ -128,8 +132,9 @@ def main():
     for f in result["files"]:
         print(f"생성: {f['path']} ({f['count']}명)")
 
+    date_note = f", 선택한 기간 밖 {result['date_filtered']}건 제외" if result["date_filtered"] else ""
     print(f"\n완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건, "
-          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외) / "
+          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외{date_note}) / "
           f"기업 {result['company_count']}곳 / 확인필요 {result['flagged']}건")
     if result["flagged"]:
         print("확인필요 표시가 있는 줄은 금액을 자동으로 채우지 않았으니 직접 확인해주세요.")

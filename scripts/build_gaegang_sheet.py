@@ -27,8 +27,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    classify_course, clean_company_name, filter_excluded_rows, load_price_table, normalize, read_apply_list,
-    split_tel_rows, style_worksheet,
+    classify_course, clean_company_name, filter_by_date_range, filter_excluded_rows, load_price_table, normalize,
+    read_apply_list, split_tel_rows, style_worksheet,
 )
 
 REQUIRED_APPLY_COLUMNS = [
@@ -64,14 +64,17 @@ def load_existing_sheet(path: str) -> dict:
 
 
 def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str,
-        added_path: str = None, existing_path: str = None) -> dict:
+        added_path: str = None, existing_path: str = None, start_date: str = None, end_date: str = None) -> dict:
     """개강내역 집계 결과를 output_path에 저장하고 요약 결과를 돌려준다.
     added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 다시 집계한다.
     existing_path(기존 개강내역 파일)를 주면 직접 채운 교육회차를 그대로 옮기고,
     인원이 바뀐 줄·새로 생긴 줄은 확인필요(노란색)에 표시한다.
+    start_date/end_date를 주면 교육시작일이 그 기간 안에 있는 신청 건만 집계한다
+    (둘 다 비어 있으면 전체 기간을 처리).
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = read_apply_list(apply_path, REQUIRED_APPLY_COLUMNS, added_path)
 
+    df, date_filtered_count = filter_by_date_range(df, start_date, end_date)
     df, _, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
@@ -176,6 +179,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
         "flagged": flagged,
         "excluded": excluded_count,
         "tel_excluded": len(tel_df),
+        "date_filtered": date_filtered_count,
         "output_path": output_path,
     }
 
@@ -193,9 +197,10 @@ def main():
         print(str(e))
         sys.exit(1)
 
+    date_note = f", 선택한 기간 밖 {result['date_filtered']}건 제외" if result["date_filtered"] else ""
     print(f"완료: 개강내역 {result['rows']}줄 (신청 {result['students']}건을 묶음, "
           f"프리패스/테스트/카드결제 {result['excluded']}건, "
-          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외) / 확인필요 {result['flagged']}줄")
+          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외{date_note}) / 확인필요 {result['flagged']}줄")
     print(f"결과 파일: {result['output_path']}")
 
 

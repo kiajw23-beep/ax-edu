@@ -80,6 +80,27 @@ def filter_excluded_rows(df: pd.DataFrame):
     return kept, excluded, int(mask.sum())
 
 
+def filter_by_date_range(df: pd.DataFrame, start_date=None, end_date=None):
+    """교육시작일이 start_date~end_date(둘 다 포함) 범위 안에 있는 줄만 남긴다.
+    start_date/end_date가 둘 다 비어 있으면 아무것도 거르지 않고 전체를 돌려준다
+    (하나만 비어 있으면 그쪽 경계는 적용하지 않는다).
+
+    반환값: (범위 안에 있는 df, 범위 밖이라 제외된 건수)
+    """
+    if not start_date and not end_date:
+        return df.reset_index(drop=True), 0
+
+    education_start = pd.to_datetime(df["교육시작일"], errors="coerce")
+    mask = pd.Series(True, index=df.index)
+    if start_date:
+        mask &= education_start >= pd.to_datetime(start_date)
+    if end_date:
+        mask &= education_start <= pd.to_datetime(end_date)
+
+    kept = df[mask].reset_index(drop=True)
+    return kept, int((~mask).sum())
+
+
 DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"
 
 

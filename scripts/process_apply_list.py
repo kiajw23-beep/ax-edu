@@ -13,8 +13,8 @@ from openpyxl.styles import PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pricing import (  # noqa: E402
-    added_note, classify_course, clean_company_name, filter_excluded_rows, load_price_table, read_apply_list,
-    split_tel_rows, style_worksheet,
+    added_note, classify_course, clean_company_name, filter_by_date_range, filter_excluded_rows, load_price_table,
+    read_apply_list, split_tel_rows, style_worksheet,
 )
 
 REQUIRED_COLUMNS = [
@@ -41,12 +41,15 @@ def has_whitespace_issue(value) -> bool:
 
 
 def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: str, output_path: str,
-        added_path: str = None) -> dict:
+        added_path: str = None, start_date: str = None, end_date: str = None) -> dict:
     """신청명단을 정리해 output_path에 저장하고 요약 결과를 돌려준다.
     added_path(추가 신청 파일)를 주면 원본 + 추가 신청을 합쳐서 정리한다.
+    start_date/end_date를 주면 교육시작일이 그 기간 안에 있는 신청 건만 처리한다
+    (둘 다 비어 있으면 전체 기간을 처리).
     입력 파일에 필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = read_apply_list(apply_list_path, REQUIRED_COLUMNS, added_path)
 
+    df, date_filtered_count = filter_by_date_range(df, start_date, end_date)
     df, excluded_df, excluded_count = filter_excluded_rows(df)
     df, tel_df = split_tel_rows(df)
 
@@ -122,6 +125,7 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         "excluded": excluded_count,
         "excluded_output_path": str(excluded_output_path),
         "tel_excluded": len(tel_df),
+        "date_filtered": date_filtered_count,
         "added": added_count,
         "duplicates": duplicate_count,
         "output_path": str(output_path),
@@ -141,8 +145,9 @@ def main():
         print(str(e))
         sys.exit(1)
 
+    date_note = f", 선택한 기간 밖 {result['date_filtered']}건 제외" if result["date_filtered"] else ""
     print(f"완료: 총 {result['total']}건 (프리패스/테스트/카드결제 {result['excluded']}건, "
-          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외) / "
+          f"도쿄일렉트론코리아 {result['tel_excluded']}건 제외{date_note}) / "
           f"환급 {result['refund']}건 / 비환급 {result['nonrefund']}건 / 확인필요 {result['flagged']}건")
     print(f"결과 파일: {result['output_path']}")
     print(f"제외된 신청명단 파일: {result['excluded_output_path']}")

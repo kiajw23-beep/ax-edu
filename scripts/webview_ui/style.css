@@ -207,6 +207,48 @@ body {
   margin: 0;
 }
 
+/* 교육시작일 기간 선택 */
+.date-range {
+  background: var(--well);
+  border-radius: var(--radius-well);
+  padding: 10px 12px;
+}
+
+.date-range label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.date-range label .hint {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.date-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-inputs input[type="date"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.date-range-inputs span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* 버튼 */
 .btn {
   height: 34px;

@@ -28,14 +28,15 @@ import tel_list  # noqa: E402
 
 
 def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path, out_dir,
-        credit_path=None, log=print) -> None:
+        credit_path=None, log=print, start_date=None, end_date=None) -> None:
     out_dir = Path(out_dir)
     stamp = datetime.now().strftime("%m%d_%H%M")
 
     log("=== 추가 신청 반영: 신청명단 ===")
     try:
         r1 = process_apply_list.run(apply_path, refund_path, general_path,
-                                    out_dir / f"1_정리된_신청명단_추가_{stamp}.xlsx", added_path)
+                                    out_dir / f"1_정리된_신청명단_추가_{stamp}.xlsx", added_path,
+                                    start_date, end_date)
         log(f"완료: 추가 신청 {r1['added']}건 반영 (기존 명단과 중복 의심 {r1['duplicates']}건) / "
             f"전체 {r1['total']}건 / 확인필요 {r1['flagged']}건")
         log(f"결과 파일: {r1['output_path']}")
@@ -46,7 +47,8 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
     log("\n=== 추가 신청 반영: 기업별 발송 (추가된 기업만) ===")
     try:
         r2 = generate_company_files.run(apply_path, refund_path, general_path,
-                                        out_dir / f"2_기업별발송_추가_{stamp}", added_path)
+                                        out_dir / f"2_기업별발송_추가_{stamp}", added_path,
+                                        start_date, end_date)
         for f in r2["files"]:
             log(f"생성: {f['path']} ({f['count']}명)")
         log(f"완료: 기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
@@ -57,12 +59,13 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
     try:
         if existing_gaegang_path:
             r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, existing_gaegang_path,
-                                         added_path, existing_gaegang_path)
+                                         added_path, existing_gaegang_path, start_date, end_date)
             log(f"완료: 개강내역 {r3['rows']}줄 / 확인필요 {r3['flagged']}줄")
             log(f"갱신한 파일: {r3['output_path']}")
         else:
             gaegang_output_path = out_dir / f"3_개강내역_추가_{stamp}.xlsx"
-            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, gaegang_output_path, added_path)
+            r3 = build_gaegang_sheet.run(apply_path, refund_path, general_path, gaegang_output_path, added_path,
+                                         start_date=start_date, end_date=end_date)
             log(f"완료: 개강내역 {r3['rows']}줄 / 확인필요 {r3['flagged']}줄 "
                 "(기존 개강내역 파일을 고르지 않아 교육회차는 비어 있고, 인원 변경 감지는 생략됨)")
             log(f"결과 파일: {r3['output_path']}")
@@ -75,7 +78,8 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
         log("\n=== 추가 신청 반영: 도쿄일렉트론코리아 ===")
         try:
             r4 = tel_list.run(apply_path, general_path, credit_path,
-                              out_dir / f"4_도쿄일렉트론코리아_추가_{stamp}.xlsx", added_path)
+                              out_dir / f"4_도쿄일렉트론코리아_추가_{stamp}.xlsx", added_path,
+                              start_date, end_date)
             log(f"완료: {r4['total']}건 / 확인필요 {r4['flagged']}건")
             log(f"결과 파일: {r4['output_path']}")
         except Exception:
