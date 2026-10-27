@@ -110,6 +110,24 @@
         </div>
       </div>
 
+      <div id="mapping" class="mapping hidden">
+        <div class="mapping-head">
+          <strong>칸 맞추기</strong>
+          <span class="hint">추가 신청 파일의 어느 칸이 원본 신청명단의 어느 칸인지 골라주세요. * 표시는 꼭 맞춰야 하고, 나머지는 맞출 칸이 없으면 비워 둡니다.</span>
+        </div>
+        <p id="map-status" class="mapping-status"></p>
+        <div id="map-body" class="hidden">
+          <div class="mapping-opts">
+            <label>시트 <select id="map-sheet"></select></label>
+            <label>칸 이름이 있는 줄 <input type="number" id="map-header" min="1" value="1" /> 번째 줄</label>
+          </div>
+          <div class="mapping-preview-wrap">
+            <table id="map-preview" class="mapping-preview"></table>
+          </div>
+          <div id="map-fields" class="mapping-fields"></div>
+        </div>
+      </div>
+
       <div class="file-row" data-slot="existing_gaegang">
         <div class="no">6</div>
         <div class="text">

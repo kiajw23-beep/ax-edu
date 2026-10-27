@@ -506,3 +506,116 @@ body {
     grid-column: 2;
   }
 }
+
+/* 추가 신청 칸 맞추기 (웹 버전) */
+.mapping {
+  background: var(--brand-soft);
+  border-radius: var(--radius-well);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.mapping.hidden,
+.mapping #map-body.hidden {
+  display: none;
+}
+
+.mapping-head {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.mapping-head .hint,
+.mapping-status {
+  color: var(--brand-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.mapping-status:empty {
+  display: none;
+}
+
+#map-body {
+  display: grid;
+  gap: 10px;
+}
+
+.mapping-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.mapping select,
+.mapping input[type="number"] {
+  border: 1px solid var(--brand-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.mapping input[type="number"] {
+  width: 64px;
+}
+
+.mapping-preview-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.mapping-preview {
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mapping-preview td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-preview td.rowno {
+  color: var(--muted);
+  text-align: right;
+}
+
+.mapping-preview tr.header-row td {
+  background: #fff59d;
+  font-weight: 600;
+}
+
+.mapping-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 12px;
+}
+
+.mapping-field {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.mapping-field select {
+  min-width: 0;
+  width: 100%;
+}
+
+.mapping-field.missing span {
+  color: #fff59d;
+  font-weight: 600;
+}
