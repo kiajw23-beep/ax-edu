@@ -74,7 +74,8 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             "정부지원금": result["정부지원금"],
             "기업부담금": result["기업부담금"],
             "승인여부": "승인대기",
-            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"], added_note(r["_추가"])) if n),
+            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"], r["_입력메모"],
+                                                 added_note(r["_추가"])) if n),
             "_추가": r["_추가"],
         })
 

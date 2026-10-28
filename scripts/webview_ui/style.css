@@ -619,3 +619,67 @@ body {
   color: #fff59d;
   font-weight: 600;
 }
+
+/* 추가 신청 넣는 방법: 파일 / 붙여넣기 (웹 버전) */
+.source-toggle {
+  display: inline-flex;
+  justify-self: start;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+}
+
+.source-toggle .toggle {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.source-toggle .toggle.active {
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.file-row.hidden,
+.paste-box.hidden {
+  display: none;
+}
+
+.paste-box {
+  background: var(--brand-soft);
+  border-radius: var(--radius-well);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.paste-box .hint {
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
+.paste-box textarea {
+  width: 100%;
+  border: 1px solid var(--brand-line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.card.dark .paste-box .btn {
+  margin-top: 0;
+  justify-self: end;
+}

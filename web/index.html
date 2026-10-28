@@ -97,6 +97,17 @@
     </div>
 
     <div class="files">
+      <div class="source-toggle" role="group" aria-label="추가 신청 넣는 방법">
+        <button type="button" class="toggle active" data-mode="file">파일로 올리기</button>
+        <button type="button" class="toggle" data-mode="paste">붙여넣기</button>
+      </div>
+
+      <div id="paste-box" class="paste-box hidden">
+        <label for="paste-text">추가 신청 붙여넣기 <span class="hint">(엑셀·메일의 표를 복사해서 붙여넣으세요)</span></label>
+        <textarea id="paste-text" rows="6" placeholder="예) 엑셀에서 칸 이름 줄과 신청자 줄을 같이 선택해 복사(Ctrl+C) 후 여기에 붙여넣기(Ctrl+V)"></textarea>
+        <button type="button" id="paste-read" class="btn">표 읽기</button>
+      </div>
+
       <div class="file-row" data-slot="added">
         <div class="no">5</div>
         <div class="text">
@@ -113,7 +124,7 @@
       <div id="mapping" class="mapping hidden">
         <div class="mapping-head">
           <strong>칸 맞추기</strong>
-          <span class="hint">추가 신청 파일의 어느 칸이 원본 신청명단의 어느 칸인지 골라주세요. * 표시는 꼭 맞춰야 하고, 나머지는 맞출 칸이 없으면 비워 둡니다.</span>
+          <span class="hint">추가 신청(파일 또는 붙여넣은 표)의 어느 칸이 원본 신청명단의 어느 칸인지 골라주세요. * 표시는 꼭 맞춰야 하고, 나머지는 맞출 칸이 없으면 비워 둡니다.</span>
         </div>
         <p id="map-status" class="mapping-status"></p>
         <div id="map-body" class="hidden">

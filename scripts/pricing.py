@@ -103,6 +103,10 @@ def filter_by_date_range(df: pd.DataFrame, start_date=None, end_date=None):
 
 DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"
 
+# 칸 맞추기(added_mapping.py)로 만든 추가 신청 파일에만 있는 내부용 칸. 날짜를 읽지 못한 경우 등
+# 입력 단계에서 생긴 확인필요 메모가 들어 있다.
+INPUT_NOTE_COLUMN = "_입력메모"
+
 
 def added_note(is_added: bool) -> str:
     """추가 신청으로 들어온 줄이면 "YYYY-MM-DD 추가 신청" 메모를, 아니면 빈 문자열을 돌려준다."""
@@ -115,6 +119,7 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
     내부용 칸 2개를 붙여서 돌려준다(결과 파일에는 나가지 않음):
     - "_추가": 추가 신청 파일에서 온 줄이면 True
     - "_중복메모": 추가 줄이 원본에 이미 있는 아이디+과정명이면 DUPLICATE_NOTE
+    - "_입력메모": 추가 신청 파일에 INPUT_NOTE_COLUMN 칸이 있으면 그 메모, 없으면 빈 문자열
     필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = pd.read_excel(apply_path)
     missing = [c for c in required_columns if c not in df.columns]
@@ -122,6 +127,7 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
         raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
     df["_추가"] = False
     df["_중복메모"] = ""
+    df["_입력메모"] = ""
     if not added_path:
         return df
 
@@ -133,6 +139,8 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
     added["_추가"] = True
     added["_중복메모"] = [DUPLICATE_NOTE if (normalize(i), normalize(c)) in base_keys else ""
                          for i, c in zip(added["아이디"], added["신청과정명"])]
+    added["_입력메모"] = (added.pop(INPUT_NOTE_COLUMN).fillna("").astype(str) if INPUT_NOTE_COLUMN in added.columns
+                       else "")
     return pd.concat([df, added], ignore_index=True)
 
 

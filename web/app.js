@@ -152,6 +152,8 @@
 
   function clearFileFields() {
     Object.keys(rows).forEach((slot) => setFieldValue(slot, null));
+    pasteText.value = "";
+    resetMapping();
     document.getElementById("date-start").value = "";
     document.getElementById("date-end").value = "";
   }
@@ -223,9 +225,9 @@
     return new Promise((resolve) => setTimeout(resolve, 50));
   }
 
-  // ----- ⑤ 추가 신청 파일 칸 맞추기 (scripts/added_mapping.py) -----
-  // 서식이 제각각인 추가 신청 파일에서 시트·칸 이름 줄을 고르고, 원본 신청명단 칸마다 쓸 칸을 고른다.
-  // 읽은 내용은 Pyodide 메모리(_map_sheets)에만 두고, 파일을 바꾸거나 화면을 비우면 지운다.
+  // ----- ⑤ 추가 신청 칸 맞추기 (scripts/added_mapping.py) -----
+  // 서식이 제각각인 추가 신청(파일 또는 붙여넣은 표)에서 시트·칸 이름 줄을 고르고, 원본 신청명단 칸마다 쓸 칸을 고른다.
+  // 읽은 내용은 Pyodide 메모리(_map_sheets)에만 두고, 파일·붙여넣은 내용을 바꾸거나 화면을 비우면 지운다.
   const mapEl = document.getElementById("mapping");
   const mapStatus = document.getElementById("map-status");
   const mapBody = document.getElementById("map-body");
@@ -233,7 +235,11 @@
   const mapHeader = document.getElementById("map-header");
   const mapPreview = document.getElementById("map-preview");
   const mapFields = document.getElementById("map-fields");
-  const mapState = { ready: false, sheet: null, headerRow: 1, columns: [], mapping: {} };
+  const pasteBox = document.getElementById("paste-box");
+  const pasteText = document.getElementById("paste-text");
+  // source: 칸 맞추기 화면이 어떤 내용을 읽었는지("file" | "paste"), 아직 없으면 null
+  const mapState = { ready: false, source: null, sheet: null, headerRow: 1, columns: [], mapping: {} };
+  let addedMode = "file"; // ⑤ 추가 신청을 넣는 방법: "file" | "paste"
   let mapColumns = null; // { all: 원본 신청명단 칸, required: 꼭 맞춰야 하는 칸 }
 
   function pyToJs(proxy) {
@@ -246,33 +252,21 @@
     return mapColumns ? mapColumns.required.filter((c) => mapState.mapping[c] === undefined) : [];
   }
 
-  async function onAddedFileChanged(handle) {
+  function resetMapping() {
     mapState.ready = false;
+    mapState.source = null;
     if (pyodide) pyodide.runPython("globals().pop('_map_sheets', None)");
-    if (!handle) {
-      mapEl.classList.add("hidden");
-      return;
-    }
+    mapEl.classList.add("hidden");
+  }
+
+  // readSheets: _map_sheets를 채우는 함수. 읽는 사이에 다른 내용으로 바뀌었으면 false를 돌려준다.
+  async function loadMapping(source, readSheets, failMessage) {
     mapEl.classList.remove("hidden");
     mapBody.classList.add("hidden");
-    if (!pyodide) {
-      mapStatus.textContent = "처리 도구를 불러오는 중입니다. 준비되면 칸 맞추기 화면이 나옵니다.";
-      return;
-    }
-    mapStatus.textContent = "파일을 읽는 중입니다...";
+    mapStatus.textContent = "읽는 중입니다...";
     await nextFrame();
     try {
-      const file = await handle.getFile();
-      const path = `/map/${file.name}`;
-      pyodide.FS.mkdirTree("/map");
-      pyodide.FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
-      try {
-        pyodide.globals.set("_map_path", path);
-        pyodide.runPython("import added_mapping\n_map_sheets = added_mapping.read_sheets(_map_path)");
-      } finally {
-        pyodide.FS.unlink(path);
-      }
-      if (state.added !== handle) return; // 읽는 사이에 다른 파일을 골랐음
+      if (!(await readSheets())) return;
       const sheets = pyToJs(pyodide.runPython("list(_map_sheets)"));
       mapSheet.innerHTML = "";
       sheets.forEach((name) => {
@@ -287,11 +281,83 @@
       refreshMapping();
       mapStatus.textContent = "";
       mapBody.classList.remove("hidden");
+      mapState.source = source;
       mapState.ready = true;
     } catch (e) {
-      mapStatus.textContent = "파일을 읽지 못했습니다. 엑셀(xlsx) 또는 CSV 파일인지 확인해주세요.\n" + e;
+      mapStatus.textContent = failMessage + "\n" + e;
     }
   }
+
+  async function onAddedFileChanged(handle) {
+    resetMapping();
+    if (!handle) return;
+    if (!pyodide) {
+      mapEl.classList.remove("hidden");
+      mapBody.classList.add("hidden");
+      mapStatus.textContent = "처리 도구를 불러오는 중입니다. 준비되면 칸 맞추기 화면이 나옵니다.";
+      return;
+    }
+    await loadMapping("file", async () => {
+      const file = await handle.getFile();
+      const path = `/map/${file.name}`;
+      pyodide.FS.mkdirTree("/map");
+      pyodide.FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+      try {
+        pyodide.globals.set("_map_path", path);
+        pyodide.runPython("import added_mapping\n_map_sheets = added_mapping.read_sheets(_map_path)");
+      } finally {
+        pyodide.FS.unlink(path);
+      }
+      return state.added === handle;
+    }, "파일을 읽지 못했습니다. 엑셀(xlsx) 또는 CSV 파일인지 확인해주세요.");
+  }
+
+  // ⑤ 넣는 방법(파일 / 붙여넣기)을 바꾸면 다른 쪽에 넣어 둔 내용은 비운다(둘을 섞어 쓰지 않음).
+  document.querySelectorAll(".source-toggle .toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.mode === addedMode) return;
+      addedMode = btn.dataset.mode;
+      document.querySelectorAll(".source-toggle .toggle").forEach((b) => b.classList.toggle("active", b === btn));
+      rows.added.row.classList.toggle("hidden", addedMode !== "file");
+      pasteBox.classList.toggle("hidden", addedMode !== "paste");
+      setFieldValue("added", null);
+      pasteText.value = "";
+      resetMapping();
+    });
+  });
+
+  document.getElementById("paste-read").addEventListener("click", async () => {
+    const text = pasteText.value;
+    if (!text.trim()) {
+      showModal("알려드립니다", "붙여넣은 내용이 없습니다. 엑셀·메일의 표를 복사해서 붙여넣어 주세요.");
+      return;
+    }
+    if (!text.includes("\t")) {
+      showModal("알려드립니다", "붙여넣은 내용이 표 형식이 아닙니다(칸 구분이 없음).\n"
+        + "엑셀이나 메일의 표를 칸 이름 줄과 함께 복사해서 붙여넣어 주세요. "
+        + "메일 본문 문장·카톡 같은 글은 다음 단계(브라우저 안 LLM)에서 지원할 예정입니다.");
+      return;
+    }
+    if (!pyodide) {
+      showModal("잠시만요", "처리 도구를 불러오는 중입니다. 잠시 후 다시 눌러주세요.");
+      return;
+    }
+    resetMapping();
+    await loadMapping("paste", async () => {
+      pyodide.globals.set("_map_text", text);
+      try {
+        pyodide.runPython("import added_mapping\n_map_sheets = added_mapping.read_pasted(_map_text)");
+      } finally {
+        pyodide.runPython("globals().pop('_map_text', None)");
+      }
+      return pasteText.value === text;
+    }, "붙여넣은 표를 읽지 못했습니다.");
+  });
+
+  // 표를 읽은 뒤 붙여넣은 내용을 고치면 칸 맞추기를 다시 해야 한다.
+  pasteText.addEventListener("input", () => {
+    if (mapState.source === "paste") resetMapping();
+  });
 
   // 시트·칸 이름 줄이 바뀔 때마다 미리보기와 칸 목록을 다시 만들고, 칸 고르기는 자동 추천으로 되돌린다.
   function refreshMapping() {
@@ -488,26 +554,32 @@
     setButtonsDisabled(true);
     try {
       const hasExisting = Boolean(state.existing_gaegang);
-      if (state.added) {
-        if (!mapState.ready) {
-          showModal("알려드립니다", "⑤ 추가 신청 파일의 칸 맞추기가 아직 준비되지 않았습니다. 잠시 후 다시 눌러주세요.");
-          return;
-        }
-        const missing = missingRequiredColumns();
-        if (missing.length) {
-          showModal("알려드립니다", `칸 맞추기에서 다음 칸을 골라주세요: ${missing.join(", ")}`);
-          return;
-        }
+      const missingMessage = "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼 / "
+        + "⑤ 추가 신청(파일 또는 붙여넣기)을 모두 넣어야 합니다. ⑥ 기존 개강내역 파일은 선택사항입니다.";
+      const hasAdded = addedMode === "file" ? Boolean(state.added) : mapState.source === "paste";
+      if (!(state.apply && state.refund && state.general && hasAdded)) {
+        showModal("알려드립니다", addedMode === "paste" && pasteText.value.trim() && !mapState.source
+          ? "붙여넣은 내용 아래의 \"표 읽기\"를 먼저 눌러주세요." : missingMessage);
+        return;
+      }
+      if (!mapState.ready) {
+        showModal("알려드립니다", "⑤ 추가 신청의 칸 맞추기가 아직 준비되지 않았습니다. 잠시 후 다시 눌러주세요.");
+        return;
+      }
+      const missing = missingRequiredColumns();
+      if (missing.length) {
+        showModal("알려드립니다", `칸 맞추기에서 다음 칸을 골라주세요: ${missing.join(", ")}`);
+        return;
       }
       const dirName = await runJob({
-        requiredSlots: ["apply", "refund", "general", "added"],
-        missingMessage: "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼 / "
-          + "⑤ 추가 신청 파일을 모두 골라야 합니다. ⑥ 기존 개강내역 파일은 선택사항입니다.",
+        requiredSlots: ["apply", "refund", "general"],
+        missingMessage,
         python: [
-          "import add_applications, added_mapping",
-          "p['added'] = added_mapping.save_standard(p['added'], map_sheet, map_header, map_mapping,",
+          "import __main__, add_applications, added_mapping",
+          "# 칸 맞추기 화면에서 읽어 둔 표(_map_sheets, 파일 또는 붙여넣기)를 표준 양식으로 바꿔 넘긴다.",
+          "added_path = added_mapping.save_standard(__main__._map_sheets, map_sheet, map_header, map_mapping,",
           "                                         '/work/in/added_standard.xlsx', log=log)",
-          "add_applications.run(p['apply'], p['added'], p['refund'], p['general'], p.get('existing_gaegang', ''), '.',",
+          "add_applications.run(p['apply'], added_path, p['refund'], p['general'], p.get('existing_gaegang', ''), '.',",
           "                     credit_path=p.get('credit') if save_tel else None, log=log,",
           "                     start_date=start_date, end_date=end_date)",
         ].join("\n"),
@@ -552,7 +624,7 @@
       mapColumns = { all, required };
       clearLog();
       setButtonsDisabled(false);
-      if (state.added) onAddedFileChanged(state.added); // 준비 전에 ⑤를 골라둔 경우
+      if (addedMode === "file" && state.added) onAddedFileChanged(state.added); // 준비 전에 ⑤를 골라둔 경우
     } catch (e) {
       clearLog();
       appendLog("[오류] 처리 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해주세요.\n" + e);
