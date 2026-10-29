@@ -2,12 +2,17 @@
 
 웹 화면의 "칸 맞추기"에서 쓴다. 사용자가 시트와 제목 줄(칸 이름이 있는 줄)을 고르고,
 원본 신청명단의 칸마다 추가 신청 파일의 어느 칸을 쓸지 직접 정한다.
-- 자동 추천은 칸 이름이 (띄어쓰기만 빼고) 똑같을 때만 한다. 비슷한 이름을 추측해서 맞추지 않는다.
+- 칸 이름이 같거나 같은 뜻 이름 목록(COLUMN_ALIASES)에 있거나, 서로 포함하면 자동으로 골라 둔다
+  (띄어쓰기·대소문자 무시). 칸 이름이 있는 줄도 위쪽 줄 중 가장 많이 맞는 줄로 골라 둔다.
+  자동으로 고른 것은 화면에서 드롭다운으로 언제든 바꿀 수 있다.
 - 필수 칸(REQUIRED_FOR_ADDED)은 반드시 맞춰야 하고, 나머지 칸은 맞출 곳이 없으면 비워 둔다
   (값을 지어내서 채우지 않음).
 - 값은 원본 그대로 옮기고 고치지 않는다(신청과정명 포함). 단, 교육시작일·교육종료일은 개강내역에서
   원본 신청명단(날짜 서식 셀)과 같은 날끼리 묶이도록 날짜로 읽어 맞춘다. 날짜로 읽지 못한 값은
   그대로 두고 확인필요 메모(pricing.INPUT_NOTE_COLUMN)를 남긴다. 연도가 없는 날짜는 추측하지 않는다.
+  교육종료일은 필수가 아니라서 비어 있으면 그냥 비워 둔다.
+- 생년월일에 주민등록번호가 들어오면 앞 6자리만 날짜(1994-03-19)로 바꾸고 뒷자리는 버린다. 세기는
+  7번째 자리(성별 자리)로만 정하고, 그 자리가 없으면 추측하지 않고 앞 6자리 그대로 두고 확인필요로 남긴다.
 칸 맞추기 결과는 바로 반영하지 않고 "확인 표"(build_review_rows/check_review_rows)로 보여 준 뒤, 사람이
 고친 내용 그대로 표준 양식 파일(save_reviewed)을 만든다. 확인 표 검사는 기존 규칙(필수 칸, 날짜, 커리큘럼
 과정명, 중복, 제외 규칙, 도쿄일렉트론코리아)을 미리 보여 주는 것뿐이고 새 판단을 하지 않는다. 확인 표에서
@@ -30,7 +35,29 @@ from pricing import (  # noqa: E402
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
 # 이 칸들이 없으면 기업명·환급 판정·개강내역 묶음을 만들 수 없어서 꼭 맞춰야 한다.
-REQUIRED_FOR_ADDED = ["회사명", "성함", "아이디", "신청과정명", "교육시작일", "교육종료일"]
+REQUIRED_FOR_ADDED = ["회사명", "성함", "아이디", "신청과정명", "교육시작일"]
+
+# 칸 이름 자동 선택에 쓰는 같은 뜻 이름(띄어쓰기·대소문자 무시). 원본 칸 이름 자체는 따로 넣지 않아도 된다.
+COLUMN_ALIASES = {
+    "회사명": ["회사", "기업명", "기업", "업체명", "소속", "고객사"],
+    "성함": ["이름", "성명", "수강생", "수강자", "교육생"],
+    "아이디": ["id", "계정", "회원id", "로그인id"],
+    "신청과정명": ["과정", "과정명", "교육명", "교육과정", "강의명", "강좌명"],
+    "교육시작일": ["시작일", "시작", "개강일", "교육시작", "수강시작일"],
+    "교육종료일": ["종료일", "종료", "교육종료", "수강종료일"],
+    "휴대전화": ["연락처", "전화번호", "휴대폰", "핸드폰", "전화"],
+    "메일주소": ["이메일", "메일", "e-mail", "email"],
+    "생년월일": ["생일", "주민등록번호", "주민번호"],
+    "구분": ["신청구분", "과정유형"],
+}
+
+# 칸 이름이 있는 줄을 찾을 때 볼 위쪽 줄 수
+HEADER_SEARCH_ROWS = 20
+
+# 주민등록번호 앞 6자리 + 7번째 자리(성별·세기). 뒷자리가 *로 가려져 있어도 된다.
+_RRN_PATTERN = re.compile(r"^(\d{2})(\d{2})(\d{2})\s*-?\s*(\d)?[\d*]*$")
+_RRN_CENTURY = {"1": 1900, "2": 1900, "5": 1900, "6": 1900, "3": 2000, "4": 2000, "7": 2000, "8": 2000,
+                "9": 1800, "0": 1800}
 
 DATE_COLUMNS = ["교육시작일", "교육종료일"]
 
@@ -79,8 +106,85 @@ def to_date(value):
     return value, False
 
 
+def to_birth_date(value):
+    """생년월일 칸 값이 주민등록번호면 앞 6자리를 날짜 글자(1994-03-19)로 바꾼다.
+    반환값: (바꾼 값, 확인필요 메모 또는 "")."""
+    match = _RRN_PATTERN.match(_cell_text(value))
+    if not match:
+        return value, ""
+    yy, mm, dd, gender = match.groups()
+    if gender is None:
+        return f"{yy}{mm}{dd}", "생년월일(주민등록번호 앞 6자리)의 연도(1900/2000년대)를 알 수 없음 - 확인필요"
+    try:
+        return datetime(_RRN_CENTURY[gender] + int(yy), int(mm), int(dd)).strftime("%Y-%m-%d"), ""
+    except ValueError:
+        return f"{yy}{mm}{dd}", "생년월일(주민등록번호 앞 6자리)이 없는 날짜임 - 확인필요"
+
+
+def convert_record(record: dict) -> list:
+    """표준 양식 한 줄(dict)의 교육일·생년월일을 바꿔 넣고, 확인필요 메모 목록을 돌려준다."""
+    notes = []
+    for col in DATE_COLUMNS:
+        value = record.get(col)
+        if not _cell_text(value):
+            record[col] = None
+            if col in REQUIRED_FOR_ADDED:
+                notes.append(f"{col} 비어 있음 - 확인필요")
+            continue
+        date, ok = to_date(value)
+        record[col] = date
+        if not ok:
+            notes.append(f"{col}을 날짜로 읽지 못함(입력값: {_cell_text(value)}) - 날짜 확인필요")
+    if _cell_text(record.get("생년월일")):
+        record["생년월일"], note = to_birth_date(record["생년월일"])
+        if note:
+            notes.append(note)
+    return notes
+
+
 def _cell_text(value) -> str:
     return "" if pd.isna(value) else str(value).strip()
+
+
+def _plain(text) -> str:
+    return re.sub(r"\s+", "", str(text)).lower()
+
+
+def _match_score(name: str, target: str) -> int:
+    """칸 이름이 원본 칸과 얼마나 맞는지: 3 같은 이름, 2 같은 뜻 이름, 1 서로 포함, 0 안 맞음."""
+    name = _plain(name)
+    if not name:
+        return 0
+    if name == _plain(target):
+        return 3
+    aliases = [_plain(a) for a in COLUMN_ALIASES.get(target, [])]
+    if name in aliases:
+        return 2
+    if any(word in name or name in word for word in [_plain(target)] + aliases if len(word) >= 2 and len(name) >= 2):
+        return 1
+    return 0
+
+
+def suggest_mapping(header_names: list) -> dict:
+    """{원본 칸 이름: 칸 index}. 잘 맞는 짝부터 하나씩 정하고, 칸 하나는 원본 칸 하나에만 쓴다."""
+    pairs = sorted(((_match_score(name, target), -REQUIRED_COLUMNS.index(target), -idx, target, idx)
+                    for idx, name in enumerate(header_names) for target in REQUIRED_COLUMNS), reverse=True)
+    suggested, used = {}, set()
+    for score, _, _, target, idx in pairs:
+        if score and target not in suggested and idx not in used:
+            suggested[target] = idx
+            used.add(idx)
+    return suggested
+
+
+def guess_header_row(sheets: dict, sheet: str) -> int:
+    """위쪽 줄 중 원본 칸 이름과 가장 많이 맞는 줄(1부터 셈). 하나도 안 맞으면 1."""
+    best_row, best_count = 1, 0
+    for i, row in enumerate(sheets[sheet].head(HEADER_SEARCH_ROWS).itertuples(index=False)):
+        count = len(suggest_mapping([_cell_text(v) for v in row]))
+        if count > best_count:
+            best_row, best_count = i + 1, count
+    return best_row
 
 
 def sheet_info(sheets: dict, sheet: str, header_row: int) -> dict:
@@ -94,13 +198,10 @@ def sheet_info(sheets: dict, sheet: str, header_row: int) -> dict:
     columns = []
     suggested = {}
     if 1 <= header_row <= len(df):
-        header = df.iloc[header_row - 1]
-        for idx, value in enumerate(header):
-            name = _cell_text(value)
-            columns.append({"index": idx, "label": f"{_column_letter(idx)}열: {name or '(이름 없음)'}"})
-            for target in REQUIRED_COLUMNS:
-                if name and re.sub(r"\s+", "", name) == target and target not in suggested:
-                    suggested[target] = idx
+        names = [_cell_text(v) for v in df.iloc[header_row - 1]]
+        columns = [{"index": idx, "label": f"{_column_letter(idx)}열: {name or '(이름 없음)'}"}
+                   for idx, name in enumerate(names)]
+        suggested = suggest_mapping(names)
     first_rows = [[_cell_text(v) for v in row] for row in df.head(8).itertuples(index=False)]
     return {"sheets": list(sheets), "row_count": len(df), "columns": columns,
             "suggested": suggested, "first_rows": first_rows}
@@ -129,16 +230,10 @@ def build_standard(sheets: dict, sheet: str, header_row: int, mapping: dict) -> 
     not_empty = out[mapped_cols].apply(lambda r: any(_cell_text(v) for v in r), axis=1)
     out = out[not_empty].reset_index(drop=True)
 
-    notes = [[] for _ in range(len(out))]
-    for col in DATE_COLUMNS:
-        converted = []
-        for i, value in enumerate(out[col]):
-            date, ok = to_date(value)
-            converted.append(date)
-            if not ok:
-                notes[i].append(f"{col}을 날짜로 읽지 못함(입력값: {_cell_text(value) or '빈칸'}) - 날짜 확인필요")
-        out[col] = pd.Series(converted, dtype=object)
-    out[INPUT_NOTE_COLUMN] = [" / ".join(n) for n in notes]
+    records = out.to_dict("records")
+    notes = [" / ".join(convert_record(record)) for record in records]
+    out = pd.DataFrame(records, columns=REQUIRED_COLUMNS, dtype=object)
+    out[INPUT_NOTE_COLUMN] = notes
     return out
 
 
@@ -209,6 +304,11 @@ def check_review_rows(rows: list, context: dict) -> list:
             if _cell_text(row.get(col)) and not to_date(row.get(col))[1]:
                 cells.append(col)
                 messages.append(f"{col}을 날짜로 읽지 못함")
+        if _cell_text(row.get("생년월일")):
+            birth_note = to_birth_date(row.get("생년월일"))[1]
+            if birth_note:
+                cells.append("생년월일")
+                messages.append(birth_note.replace(" - 확인필요", ""))
         course = _cell_text(row.get("신청과정명"))
         if course and normalize(course) not in context["course_names"]:
             cells.append("신청과정명")
@@ -234,15 +334,7 @@ def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> 
     for r in rows:
         values, original = r["values"], r.get("original")
         record = {c: (_cell_text(values.get(c)) or None) for c in REQUIRED_COLUMNS}
-        note = []
-        for col in DATE_COLUMNS:
-            if record[col] is not None:
-                date, ok = to_date(record[col])
-                record[col] = date
-                if not ok:
-                    note.append(f"{col}을 날짜로 읽지 못함(입력값: {values.get(col)}) - 날짜 확인필요")
-            else:
-                note.append(f"{col}을 날짜로 읽지 못함(입력값: 빈칸) - 날짜 확인필요")
+        note = convert_record(record)
         if original is None:
             added += 1
             note.append("확인 표에서 직접 추가한 줄")

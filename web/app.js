@@ -253,7 +253,7 @@
   const pasteBox = document.getElementById("paste-box");
   const pasteText = document.getElementById("paste-text");
   // source: 칸 맞추기 화면이 어떤 내용을 읽었는지("file" | "paste"), 아직 없으면 null
-  const mapState = { ready: false, source: null, sheet: null, headerRow: 1, columns: [], mapping: {} };
+  const mapState = { ready: false, source: null, sheet: null, headerRow: 1, columns: [], mapping: {}, auto: new Set() };
   let addedMode = "file"; // ⑤ 추가 신청을 넣는 방법: "file" | "paste"
   let mapColumns = null; // { all: 원본 신청명단 칸, required: 꼭 맞춰야 하는 칸 }
 
@@ -292,8 +292,8 @@
         mapSheet.appendChild(option);
       });
       mapState.sheet = sheets[0];
-      mapState.headerRow = 1;
-      mapHeader.value = 1;
+      mapState.headerRow = guessHeaderRow();
+      mapHeader.value = mapState.headerRow;
       refreshMapping();
       mapStatus.textContent = "";
       mapBody.classList.remove("hidden");
@@ -375,6 +375,12 @@
     if (mapState.source === "paste") resetMapping();
   });
 
+  // 위쪽 줄 중 원본 칸 이름과 가장 많이 맞는 줄을 칸 이름 줄로 골라 둔다(사용자가 숫자로 바꿀 수 있음).
+  function guessHeaderRow() {
+    pyodide.globals.set("_map_sheet", mapState.sheet);
+    return pyodide.runPython("added_mapping.guess_header_row(_map_sheets, _map_sheet)");
+  }
+
   // 시트·칸 이름 줄이 바뀔 때마다 미리보기와 칸 목록을 다시 만들고, 칸 고르기는 자동 추천으로 되돌린다.
   function refreshMapping() {
     pyodide.globals.set("_map_sheet", mapState.sheet);
@@ -383,6 +389,7 @@
     mapHeader.max = Math.max(1, info.row_count);
     mapState.columns = info.columns;
     mapState.mapping = { ...info.suggested };
+    mapState.auto = new Set(Object.keys(info.suggested)); // 자동으로 고른 칸(사용자가 바꾸면 빠짐)
     renderPreview(info.first_rows);
     renderFields();
   }
@@ -425,13 +432,22 @@
         option.textContent = col.label;
         select.appendChild(option);
       });
-      const update = () => field.classList.toggle("missing", required && mapState.mapping[target] === undefined);
+      const autoTag = document.createElement("span");
+      autoTag.className = "auto-tag";
+      autoTag.textContent = "자동";
+      autoTag.title = "칸 이름이 비슷해서 자동으로 골랐습니다. 맞는지 확인해주세요.";
+      name.appendChild(autoTag);
+      const update = () => {
+        field.classList.toggle("missing", required && mapState.mapping[target] === undefined);
+        autoTag.classList.toggle("hidden", !mapState.auto.has(target));
+      };
       if (mapState.mapping[target] !== undefined) select.value = String(mapState.mapping[target]);
       select.addEventListener("change", async () => {
         const chosen = select.value;
         select.value = mapState.mapping[target] === undefined ? "" : String(mapState.mapping[target]);
         if (!(await confirmDiscardReview())) return;
         select.value = chosen;
+        mapState.auto.delete(target);
         if (select.value === "") delete mapState.mapping[target];
         else mapState.mapping[target] = Number(select.value);
         update();
@@ -448,8 +464,8 @@
     if (!(await confirmDiscardReview())) return;
     mapSheet.value = chosen;
     mapState.sheet = mapSheet.value;
-    mapState.headerRow = 1;
-    mapHeader.value = 1;
+    mapState.headerRow = guessHeaderRow();
+    mapHeader.value = mapState.headerRow;
     refreshMapping();
   });
 
@@ -653,13 +669,36 @@
     runAddedBtn.disabled = disabled;
   }
 
+  // 교육시작일 기간은 키보드로 입력한다: 2026-11-01 / 2026.11.01 / 2026/11/1 / 20261101.
+  // 읽으면 "YYYY-MM-DD"를, 비어 있으면 ""를, 읽지 못하면 null을 돌려준다.
+  function parseDateText(text) {
+    const value = text.trim();
+    if (!value) return "";
+    const match = value.match(/^(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})\.?$/) || value.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (!match) return null;
+    const [y, m, d] = match.slice(1).map(Number);
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  [dateStartInput, dateEndInput].forEach((input) => {
+    input.addEventListener("blur", () => {
+      const parsed = parseDateText(input.value);
+      if (parsed) input.value = parsed;
+    });
+  });
+
   function validate(requiredSlots, missingMessage) {
     if (requiredSlots.some((slot) => !state[slot])) return missingMessage;
     if (saveTelCheckbox.checked && !state.credit) {
       return "도쿄일렉트론코리아 별도 파일을 만들려면 ④ 학점 파일을 골라야 합니다.";
     }
-    const start = dateStartInput.value;
-    const end = dateEndInput.value;
+    const start = parseDateText(dateStartInput.value);
+    const end = parseDateText(dateEndInput.value);
+    if (start === null || end === null) {
+      return "교육시작일 기간을 날짜로 읽지 못했습니다. 2026-11-01처럼 연-월-일로 입력해주세요.";
+    }
     if (start && end && start > end) {
       return "교육시작일 기간이 올바르지 않습니다. 시작일이 종료일보다 늦습니다.";
     }
@@ -703,8 +742,8 @@
       ns = pyodide.toPy({
         p: paths,
         save_tel: saveTelCheckbox.checked,
-        start_date: dateStartInput.value || null,
-        end_date: dateEndInput.value || null,
+        start_date: parseDateText(dateStartInput.value) || null,
+        end_date: parseDateText(dateEndInput.value) || null,
         log: (text) => logs.push(text),
         ...extra,
       });

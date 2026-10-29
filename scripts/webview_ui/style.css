@@ -232,7 +232,8 @@ body {
   gap: 8px;
 }
 
-.date-range-inputs input[type="date"] {
+.date-range-inputs input[type="date"],
+.date-range-inputs input[type="text"] {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
@@ -805,4 +806,19 @@ body {
 
 .review-table button.delete:hover {
   color: var(--text);
+}
+
+/* 칸 맞추기 자동 선택 표시 (웹 버전) */
+.mapping-field .auto-tag {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-line);
+  color: var(--brand-ink);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.mapping-field .auto-tag.hidden {
+  display: none;
 }
