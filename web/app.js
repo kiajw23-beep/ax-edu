@@ -542,7 +542,8 @@
 
   // ----- 확인 표: 칸 맞추기 결과를 반영 전에 보여 주고 고치게 한다 (scripts/added_mapping.py) -----
   // 검사는 기존 규칙(필수 칸·날짜·커리큘럼 과정명·중복·제외 규칙)을 미리 보여 주는 것뿐이다.
-  // 줄마다 values(지금 값)와 original(확인 표를 만들 때 값, 직접 추가한 줄은 null)을 들고 있다.
+  // 줄마다 values(지금 값)와 original(확인 표를 만들 때 값, 직접 추가한 줄은 null),
+  // auto(비슷한 과정명으로 자동 추정한 칸 -> 파일에 적혀 있던 값)를 들고 있다.
   const reviewEl = document.getElementById("review");
   const reviewTable = document.getElementById("review-table");
   const reviewSummary = document.getElementById("review-summary");
@@ -609,9 +610,10 @@
       await loadReviewContext();
       pyodide.globals.set("_map_mapping", pyodide.toPy(mapState.mapping));
       const rows = pyToJs(pyodide.runPython(
-        "added_mapping.build_review_rows(_map_sheets, _map_sheet, _map_header, _map_mapping)"));
+        "added_mapping.build_review_rows(_map_sheets, _map_sheet, _map_header, _map_mapping, _review_ctx)"));
       reviewState.columns = pyToJs(pyodide.runPython("added_mapping.review_columns(_map_mapping)"));
-      reviewState.rows = rows.map((values) => ({ values, original: { ...values } }));
+      // auto: 비슷한 과정명으로 자동 추정한 칸 -> 파일에 적혀 있던 값
+      reviewState.rows = rows.map(({ values, auto }) => ({ values, original: { ...values }, auto }));
       reviewState.built = true;
       renderReview();
     } catch (e) {
@@ -621,7 +623,7 @@
   });
 
   document.getElementById("review-add").addEventListener("click", () => {
-    reviewState.rows.push({ values: Object.fromEntries(reviewState.columns.map((c) => [c, ""])), original: null });
+    reviewState.rows.push({ values: Object.fromEntries(reviewState.columns.map((c) => [c, ""])), original: null, auto: {} });
     reviewState.dirty = true;
     renderReview();
     const inputs = reviewTable.querySelectorAll("tr:last-child input");
@@ -687,7 +689,7 @@
   function recheckReview() {
     clearTimeout(recheckTimer);
     if (!reviewState.built) return;
-    const values = pyodide.toPy(reviewState.rows.map((r) => r.values));
+    const values = pyodide.toPy(reviewState.rows);
     try {
       pyodide.globals.set("_review_rows", values);
       reviewState.checks = pyToJs(pyodide.runPython(

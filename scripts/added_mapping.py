@@ -16,7 +16,9 @@
 칸 맞추기 결과는 바로 반영하지 않고 "확인 표"(build_review_rows/check_review_rows)로 보여 준 뒤, 사람이
 고친 내용 그대로 표준 양식 파일(save_reviewed)을 만든다. 확인 표 검사는 기존 규칙(필수 칸, 날짜, 커리큘럼
 과정명, 중복, 제외 규칙, 도쿄일렉트론코리아)을 미리 보여 주는 것뿐이고 새 판단을 하지 않는다. 확인 표에서
-직접 고친 칸·직접 추가한 줄은 확인필요 메모로 남긴다.
+직접 고친 칸·직접 추가한 줄은 확인필요 메모로 남긴다. 추가 신청의 신청과정명이 커리큘럼에 (공백 차이 빼고) 똑같이
+없으면 가장 비슷한 커리큘럼 과정명을 골라 넣고(suggest_course) 확인필요로 표시한다. 원본 신청명단의 과정명은
+이 추정을 하지 않고 절대 바꾸지 않는다.
 만든 표준 양식 파일은 기존 add_applications.run()에 그대로 넘긴다.
 """
 import csv
@@ -24,6 +26,7 @@ import io
 import re
 import sys
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import pandas as pd
@@ -50,6 +53,10 @@ COLUMN_ALIASES = {
     "생년월일": ["생일", "주민등록번호", "주민번호"],
     "구분": ["신청구분", "과정유형"],
 }
+
+# 과정명 추정: 이 점수(0~1) 이상인 가장 비슷한 과정만 고르고, 1·2등 차이가 이보다 작으면 하나로 정하지 않는다.
+COURSE_MATCH_MIN_SCORE = 0.6
+COURSE_MATCH_MIN_GAP = 0.05
 
 # 칸 이름이 있는 줄을 찾을 때 볼 위쪽 줄 수
 HEADER_SEARCH_ROWS = 20
@@ -276,11 +283,63 @@ def review_columns(mapping: dict) -> list:
     return [c for c in REQUIRED_COLUMNS if c in REQUIRED_FOR_ADDED or mapping.get(c) is not None]
 
 
-def build_review_rows(sheets: dict, sheet: str, header_row: int, mapping: dict) -> list:
-    """칸 맞추기 결과를 확인 표 줄 목록으로 만든다: [{칸 이름: 글자}]. 날짜는 B단계 규칙으로 맞춘 값이다."""
+def _course_key(text) -> str:
+    """과정명 비교용: 띄어쓰기·괄호·기호를 빼고 영문은 소문자로."""
+    return re.sub(r"[\W_]+", "", str(text)).lower()
+
+
+def _bigrams(text: str) -> set:
+    return {text[i:i + 2] for i in range(len(text) - 1)} or {text}
+
+
+def course_similarity(name: str, candidate: str) -> float:
+    """두 과정명이 얼마나 비슷한지 0~1. 글자 순서 비슷함, 두 글자씩 겹치는 정도, 한쪽이 다른 쪽에 들어 있음,
+    과정명의 낱말(키워드)이 후보에 들어 있는 정도 중 가장 높은 값."""
+    a, b = _course_key(name), _course_key(candidate)
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    ratio = SequenceMatcher(None, a, b).ratio()
+    ga, gb = _bigrams(a), _bigrams(b)
+    overlap = len(ga & gb) / len(ga | gb)
+    contained = 0.9 if (a in b or b in a) else 0.0
+    words = [_course_key(w) for w in re.split(r"[\s\W_]+", str(name)) if len(_course_key(w)) >= 2]
+    keywords = sum(len(w) for w in words if w in b) / len(a) if words else 0.0
+    return max(ratio, overlap, contained, keywords)
+
+
+def suggest_course(name: str, course_names) -> dict:
+    """커리큘럼에 똑같은 과정명이 없을 때 가장 비슷한 과정명을 고른다.
+    반환값: {"course": 고른 과정명 또는 None, "candidates": 비슷한 순 위 3개 [(과정명, 점수)]}.
+    가장 비슷한 것도 COURSE_MATCH_MIN_SCORE 미만이거나, 1·2등이 거의 같으면 고르지 않는다(추측 금지)."""
+    ranked = sorted(((course_similarity(name, c), c) for c in course_names), reverse=True)
+    candidates = [(c, round(score, 2)) for score, c in ranked[:3] if score > 0]
+    if not ranked or ranked[0][0] < COURSE_MATCH_MIN_SCORE:
+        return {"course": None, "candidates": candidates}
+    if len(ranked) > 1 and ranked[0][0] - ranked[1][0] < COURSE_MATCH_MIN_GAP:
+        return {"course": None, "candidates": candidates}
+    return {"course": ranked[0][1], "candidates": candidates}
+
+
+def build_review_rows(sheets: dict, sheet: str, header_row: int, mapping: dict, context: dict) -> list:
+    """칸 맞추기 결과를 확인 표 줄 목록으로 만든다: [{"values": {칸 이름: 글자}, "auto": {칸 이름: 원래 글자}}].
+    날짜는 B단계 규칙으로 맞춘 값이다. 신청과정명이 커리큘럼에 없으면 가장 비슷한 과정명으로 바꿔 넣고
+    auto에 원래 과정명을 남긴다(확인 표·결과 파일에 확인필요로 표시)."""
     df = build_standard(sheets, sheet, header_row, mapping)
     columns = review_columns(mapping)
-    return [{c: _review_text(row[c]) for c in columns} for _, row in df.iterrows()]
+    rows = []
+    for _, row in df.iterrows():
+        values = {c: _review_text(row[c]) for c in columns}
+        auto = {}
+        course = values.get("신청과정명", "")
+        if course and normalize(course) not in context["course_names"]:
+            picked = suggest_course(course, context["course_names"])["course"]
+            if picked:
+                auto["신청과정명"] = course
+                values["신청과정명"] = picked
+        rows.append({"values": values, "auto": auto})
+    return rows
 
 
 def load_check_context(apply_path: str, refund_path: str, general_path: str) -> dict:
@@ -299,10 +358,17 @@ def course_names(context: dict) -> list:
 
 
 def check_review_rows(rows: list, context: dict) -> list:
-    """줄마다 {"cells": 노란색으로 표시할 칸 이름들, "messages": 확인 내용}을 돌려준다."""
+    """rows: [{"values": {칸: 글자}, "original": 확인 표를 만들 때 값(직접 추가한 줄은 None),
+    "auto": {자동 추정한 칸: 파일에 적혀 있던 글자}}].
+    줄마다 {"cells": 노란색으로 표시할 칸 이름들, "messages": 확인 내용}을 돌려준다."""
+    # 자동 추정한 값을 사람이 그대로 둔 칸만 "자동 추정"으로 본다(다른 값으로 고쳤으면 사람이 정한 것).
+    auto_list = [{c: before for c, before in (r.get("auto") or {}).items()
+                  if r.get("original") and _cell_text(r["values"].get(c)) == _cell_text(r["original"].get(c))}
+                 for r in rows]
+    rows = [r["values"] for r in rows]
     keys = [(normalize(r.get("아이디", "")), normalize(r.get("신청과정명", ""))) for r in rows]
     results = []
-    for row, key in zip(rows, keys):
+    for row, key, auto in zip(rows, keys, auto_list):
         cells, messages = [], []
         empty = [c for c in REQUIRED_FOR_ADDED if not _cell_text(row.get(c))]
         if empty:
@@ -318,9 +384,14 @@ def check_review_rows(rows: list, context: dict) -> list:
                 cells.append("생년월일")
                 messages.append(birth_note.replace(" - 확인필요", ""))
         course = _cell_text(row.get("신청과정명"))
-        if course and normalize(course) not in context["course_names"]:
+        if "신청과정명" in auto:
             cells.append("신청과정명")
-            messages.append("과정명이 환급·비환급 커리큘럼 어디에도 없음")
+            messages.append(f"과정명을 비슷한 과정으로 자동 추정(원래: {auto['신청과정명']})")
+        elif course and normalize(course) not in context["course_names"]:
+            cells.append("신청과정명")
+            candidates = suggest_course(course, context["course_names"])["candidates"]
+            hint = f" - 비슷한 과정: {', '.join(c for c, _ in candidates)}" if candidates else ""
+            messages.append("과정명이 환급·비환급 커리큘럼 어디에도 없음" + hint)
         if all(key) and key in context["base_keys"]:
             messages.append("원본 신청명단에 같은 아이디·과정명 신청이 이미 있음")
         if all(key) and keys.count(key) > 1:
@@ -343,11 +414,16 @@ def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> 
         values, original = r["values"], r.get("original")
         record = {c: (_cell_text(values.get(c)) or None) for c in REQUIRED_COLUMNS}
         note = convert_record(record)
+        auto = r.get("auto") or {}
         if original is None:
             added += 1
             note.append("확인 표에서 직접 추가한 줄")
         else:
-            changes = [f"{c}(원래 값: {_cell_text(original.get(c)) or '빈칸'})" for c in values
+            for col, before in auto.items():
+                if _cell_text(values.get(col)) == _cell_text(original.get(col)):
+                    note.append(f"{col}을 비슷한 과정으로 자동 추정(원래 값: {before}) - 과정명 확인필요")
+            # 자동 추정한 칸을 사람이 다시 고쳤으면 원래 값은 파일에 적혀 있던 값이다.
+            changes = [f"{c}(원래 값: {_cell_text(auto.get(c, original.get(c))) or '빈칸'})" for c in values
                        if _cell_text(values.get(c)) != _cell_text(original.get(c))]
             if changes:
                 edited += 1
