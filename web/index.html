@@ -136,6 +136,17 @@
             <table id="map-preview" class="mapping-preview"></table>
           </div>
           <div id="map-fields" class="mapping-fields"></div>
+          <button type="button" id="review-build" class="btn review-build">확인 표 만들기</button>
+          <div id="review" class="review hidden">
+            <div class="review-head">
+              <strong>확인 표</strong>
+              <span id="review-summary" class="hint"></span>
+              <button type="button" id="review-add" class="btn">+ 줄 추가</button>
+            </div>
+            <p class="hint">칸을 눌러 바로 고칠 수 있습니다. 직접 고친 칸·추가한 줄은 결과 파일 확인필요에 기록됩니다. 노란 칸은 확인이 필요한 곳입니다.</p>
+            <div class="review-wrap"><table id="review-table" class="review-table"></table></div>
+            <datalist id="course-list"></datalist>
+          </div>
         </div>
       </div>
 
@@ -169,7 +180,10 @@
   <div class="modal">
     <h3 id="modal-title"></h3>
     <p id="modal-message"></p>
-    <button type="button" id="modal-ok" class="btn primary">확인</button>
+    <div class="modal-buttons">
+      <button type="button" id="modal-cancel" class="btn hidden">취소</button>
+      <button type="button" id="modal-ok" class="btn primary">확인</button>
+    </div>
   </div>
 </div>
 

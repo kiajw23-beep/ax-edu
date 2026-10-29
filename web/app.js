@@ -79,6 +79,7 @@
     state[slot] = handle || null;
     rows[slot].input.value = handle ? handle.name : "";
     if (slot === "added") onAddedFileChanged(handle);
+    if (["apply", "refund", "general"].includes(slot) && handle) onBaseFileChanged();
   }
 
   function closeAllRecentMenus() {
@@ -175,14 +176,28 @@
   const modalOverlay = document.getElementById("modal-overlay");
   const modalTitle = document.getElementById("modal-title");
   const modalMessage = document.getElementById("modal-message");
-  document.getElementById("modal-ok").addEventListener("click", () => {
+  const modalCancel = document.getElementById("modal-cancel");
+  let modalResolve = null;
+  function closeModal(answer) {
     modalOverlay.classList.add("hidden");
-  });
+    if (modalResolve) modalResolve(answer);
+    modalResolve = null;
+  }
+  document.getElementById("modal-ok").addEventListener("click", () => closeModal(true));
+  modalCancel.addEventListener("click", () => closeModal(false));
 
   function showModal(title, message) {
     modalTitle.textContent = title;
     modalMessage.textContent = message;
+    modalCancel.classList.add("hidden");
     modalOverlay.classList.remove("hidden");
+  }
+
+  // 확인/취소를 고르게 하고, 확인이면 true를 돌려준다.
+  function showConfirm(title, message) {
+    showModal(title, message);
+    modalCancel.classList.remove("hidden");
+    return new Promise((resolve) => { modalResolve = resolve; });
   }
 
   // ----- Pyodide 가상 파일 시스템 <-> 실제 파일 -----
@@ -253,6 +268,7 @@
   }
 
   function resetMapping() {
+    clearReview();
     mapState.ready = false;
     mapState.source = null;
     if (pyodide) pyodide.runPython("globals().pop('_map_sheets', None)");
@@ -411,7 +427,11 @@
       });
       const update = () => field.classList.toggle("missing", required && mapState.mapping[target] === undefined);
       if (mapState.mapping[target] !== undefined) select.value = String(mapState.mapping[target]);
-      select.addEventListener("change", () => {
+      select.addEventListener("change", async () => {
+        const chosen = select.value;
+        select.value = mapState.mapping[target] === undefined ? "" : String(mapState.mapping[target]);
+        if (!(await confirmDiscardReview())) return;
+        select.value = chosen;
         if (select.value === "") delete mapState.mapping[target];
         else mapState.mapping[target] = Number(select.value);
         update();
@@ -422,22 +442,204 @@
     });
   }
 
-  mapSheet.addEventListener("change", () => {
+  mapSheet.addEventListener("change", async () => {
+    const chosen = mapSheet.value;
+    mapSheet.value = mapState.sheet;
+    if (!(await confirmDiscardReview())) return;
+    mapSheet.value = chosen;
     mapState.sheet = mapSheet.value;
     mapState.headerRow = 1;
     mapHeader.value = 1;
     refreshMapping();
   });
 
-  mapHeader.addEventListener("change", () => {
+  mapHeader.addEventListener("change", async () => {
     const row = parseInt(mapHeader.value, 10);
-    if (!(row >= 1 && row <= Number(mapHeader.max))) {
-      mapHeader.value = mapState.headerRow;
-      return;
-    }
+    mapHeader.value = mapState.headerRow;
+    if (!(row >= 1 && row <= Number(mapHeader.max))) return;
+    if (!(await confirmDiscardReview())) return;
+    mapHeader.value = row;
     mapState.headerRow = row;
     refreshMapping();
   });
+
+  // ----- 확인 표: 칸 맞추기 결과를 반영 전에 보여 주고 고치게 한다 (scripts/added_mapping.py) -----
+  // 검사는 기존 규칙(필수 칸·날짜·커리큘럼 과정명·중복·제외 규칙)을 미리 보여 주는 것뿐이다.
+  // 줄마다 values(지금 값)와 original(확인 표를 만들 때 값, 직접 추가한 줄은 null)을 들고 있다.
+  const reviewEl = document.getElementById("review");
+  const reviewTable = document.getElementById("review-table");
+  const reviewSummary = document.getElementById("review-summary");
+  const courseList = document.getElementById("course-list");
+  const reviewState = { built: false, dirty: false, columns: [], rows: [], deleted: 0, checks: [] };
+  let recheckTimer = null;
+
+  function clearReview() {
+    clearTimeout(recheckTimer);
+    Object.assign(reviewState, { built: false, dirty: false, columns: [], rows: [], deleted: 0, checks: [] });
+    reviewEl.classList.add("hidden");
+    reviewTable.innerHTML = "";
+    if (pyodide) pyodide.runPython("globals().pop('_review_ctx', None)");
+  }
+
+  // 확인 표를 고친 뒤 칸 맞추기를 바꾸면 고친 내용이 사라지므로 먼저 물어본다.
+  async function confirmDiscardReview() {
+    if (reviewState.built && reviewState.dirty
+        && !(await showConfirm("알려드립니다", "확인 표에서 고친 내용이 사라집니다. 계속할까요?"))) {
+      return false;
+    }
+    clearReview();
+    return true;
+  }
+
+  // ①②③ 파일로 검사 기준(원본 아이디·과정명, 커리큘럼 과정명)을 읽는다.
+  async function loadReviewContext() {
+    const paths = {};
+    pyodide.FS.mkdirTree("/review");
+    try {
+      for (const slot of ["apply", "refund", "general"]) {
+        const file = await state[slot].getFile();
+        paths[slot] = `/review/${slot}_${file.name}`;
+        pyodide.FS.writeFile(paths[slot], new Uint8Array(await file.arrayBuffer()));
+      }
+      pyodide.globals.set("_review_paths", pyodide.toPy(paths));
+      pyodide.runPython("_review_ctx = added_mapping.load_check_context("
+        + "_review_paths['apply'], _review_paths['refund'], _review_paths['general'])\n"
+        + "globals().pop('_review_paths', None)");
+    } finally {
+      Object.values(paths).forEach((path) => pyodide.FS.unlink(path));
+    }
+    courseList.innerHTML = "";
+    pyToJs(pyodide.runPython("added_mapping.course_names(_review_ctx)")).forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      courseList.appendChild(option);
+    });
+  }
+
+  document.getElementById("review-build").addEventListener("click", async () => {
+    if (!(state.apply && state.refund && state.general)) {
+      showModal("알려드립니다", "확인 표는 ① 신청명단 / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼과 비교해 검사합니다. "
+        + "①②③ 파일을 먼저 골라주세요.");
+      return;
+    }
+    const missing = missingRequiredColumns();
+    if (missing.length) {
+      showModal("알려드립니다", `칸 맞추기에서 다음 칸을 골라주세요: ${missing.join(", ")}`);
+      return;
+    }
+    if (!(await confirmDiscardReview())) return;
+    try {
+      await loadReviewContext();
+      pyodide.globals.set("_map_mapping", pyodide.toPy(mapState.mapping));
+      const rows = pyToJs(pyodide.runPython(
+        "added_mapping.build_review_rows(_map_sheets, _map_sheet, _map_header, _map_mapping)"));
+      reviewState.columns = pyToJs(pyodide.runPython("added_mapping.review_columns(_map_mapping)"));
+      reviewState.rows = rows.map((values) => ({ values, original: { ...values } }));
+      reviewState.built = true;
+      renderReview();
+    } catch (e) {
+      clearReview();
+      showModal("알려드립니다", "확인 표를 만들지 못했습니다.\n" + e);
+    }
+  });
+
+  document.getElementById("review-add").addEventListener("click", () => {
+    reviewState.rows.push({ values: Object.fromEntries(reviewState.columns.map((c) => [c, ""])), original: null });
+    reviewState.dirty = true;
+    renderReview();
+    const inputs = reviewTable.querySelectorAll("tr:last-child input");
+    if (inputs.length) inputs[0].focus();
+  });
+
+  function renderReview() {
+    reviewTable.innerHTML = "";
+    const head = document.createElement("tr");
+    ["#", ...reviewState.columns, "확인 내용", ""].forEach((name) => {
+      const th = document.createElement("th");
+      th.textContent = name;
+      head.appendChild(th);
+    });
+    reviewTable.appendChild(head);
+    reviewState.rows.forEach((row, i) => {
+      const tr = document.createElement("tr");
+      const no = document.createElement("td");
+      no.className = "rowno";
+      no.textContent = i + 1;
+      tr.appendChild(no);
+      reviewState.columns.forEach((col) => {
+        const td = document.createElement("td");
+        td.dataset.col = col;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = row.values[col];
+        // 신청과정명은 직접 고치거나 커리큘럼 과정명 목록에서 골라 넣는다(자동으로 바꾸지 않음).
+        if (col === "신청과정명") input.setAttribute("list", "course-list");
+        input.addEventListener("input", () => {
+          row.values[col] = input.value;
+          reviewState.dirty = true;
+          clearTimeout(recheckTimer);
+          recheckTimer = setTimeout(recheckReview, 250);
+        });
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+      const messages = document.createElement("td");
+      messages.className = "messages";
+      tr.appendChild(messages);
+      const del = document.createElement("td");
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "delete";
+      delBtn.title = "이 줄 지우기";
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", () => {
+        reviewState.rows.splice(reviewState.rows.indexOf(row), 1);
+        if (row.original) reviewState.deleted += 1;
+        reviewState.dirty = true;
+        renderReview();
+      });
+      del.appendChild(delBtn);
+      tr.appendChild(del);
+      reviewTable.appendChild(tr);
+    });
+    reviewEl.classList.remove("hidden");
+    recheckReview();
+  }
+
+  // 지금 표 내용으로 다시 검사해 노란 칸·확인 내용·요약을 바꾼다(입력 칸은 그대로 둬서 고치던 자리를 유지).
+  function recheckReview() {
+    clearTimeout(recheckTimer);
+    if (!reviewState.built) return;
+    const values = pyodide.toPy(reviewState.rows.map((r) => r.values));
+    try {
+      pyodide.globals.set("_review_rows", values);
+      reviewState.checks = pyToJs(pyodide.runPython(
+        "_checks = added_mapping.check_review_rows(_review_rows, _review_ctx)\n"
+        + "globals().pop('_review_rows', None)\n_checks"));
+    } finally {
+      values.destroy();
+    }
+    const trs = reviewTable.querySelectorAll("tr");
+    reviewState.checks.forEach((check, i) => {
+      const tr = trs[i + 1];
+      tr.querySelectorAll("td[data-col]").forEach((td) => td.classList.toggle("warn", check.cells.includes(td.dataset.col)));
+      tr.querySelector("td.messages").textContent = check.messages.join("\n");
+    });
+    const flagged = reviewState.checks.filter((c) => c.messages.length).length;
+    reviewSummary.textContent = `${reviewState.rows.length}건 · 확인필요 ${flagged}건`;
+  }
+
+  // ①②③을 바꾸면 검사 기준이 바뀌므로 다시 읽어서 검사한다.
+  async function onBaseFileChanged() {
+    if (!reviewState.built) return;
+    if (!(state.apply && state.refund && state.general)) return;
+    try {
+      await loadReviewContext();
+      recheckReview();
+    } catch (e) {
+      showModal("알려드립니다", "확인 표 검사 기준(①②③ 파일)을 다시 읽지 못했습니다.\n" + e);
+    }
+  }
 
   // ----- 실행 -----
   const saveTelCheckbox = document.getElementById("save-tel");
@@ -562,30 +764,35 @@
           ? "붙여넣은 내용 아래의 \"표 읽기\"를 먼저 눌러주세요." : missingMessage);
         return;
       }
-      if (!mapState.ready) {
-        showModal("알려드립니다", "⑤ 추가 신청의 칸 맞추기가 아직 준비되지 않았습니다. 잠시 후 다시 눌러주세요.");
+      if (!reviewState.built) {
+        showModal("알려드립니다", "칸 맞추기 아래의 \"확인 표 만들기\"를 먼저 눌러 내용을 확인해주세요.");
         return;
       }
-      const missing = missingRequiredColumns();
-      if (missing.length) {
-        showModal("알려드립니다", `칸 맞추기에서 다음 칸을 골라주세요: ${missing.join(", ")}`);
+      if (!reviewState.rows.length) {
+        showModal("알려드립니다", "확인 표에 반영할 줄이 없습니다.");
+        return;
+      }
+      recheckReview();
+      const flagged = reviewState.checks.filter((c) => c.messages.length).length;
+      if (flagged && !(await showConfirm("확인필요가 있습니다",
+        `확인 표에 확인필요 ${flagged}건이 있습니다. 결과 파일에도 확인필요로 표시됩니다.\n그대로 반영할까요?`))) {
         return;
       }
       const dirName = await runJob({
         requiredSlots: ["apply", "refund", "general"],
         missingMessage,
         python: [
-          "import __main__, add_applications, added_mapping",
-          "# 칸 맞추기 화면에서 읽어 둔 표(_map_sheets, 파일 또는 붙여넣기)를 표준 양식으로 바꿔 넘긴다.",
-          "added_path = added_mapping.save_standard(__main__._map_sheets, map_sheet, map_header, map_mapping,",
-          "                                         '/work/in/added_standard.xlsx', log=log)",
+          "import add_applications, added_mapping",
+          "# 확인 표에서 확정한 내용을 표준 양식으로 바꿔 넘긴다(직접 고친 칸·추가한 줄은 확인필요 메모).",
+          "added_path = added_mapping.save_reviewed(review_rows, '/work/in/added_standard.xlsx',",
+          "                                         deleted=review_deleted, log=log)",
           "add_applications.run(p['apply'], added_path, p['refund'], p['general'], p.get('existing_gaegang', ''), '.',",
           "                     credit_path=p.get('credit') if save_tel else None, log=log,",
           "                     start_date=start_date, end_date=end_date)",
         ].join("\n"),
         // exe와 똑같이 ⑥ 기존 개강내역 파일은 그 파일 자체를 갱신한다.
         writeBackSlot: "existing_gaegang",
-        extra: { map_sheet: mapState.sheet, map_header: mapState.headerRow, map_mapping: mapState.mapping },
+        extra: { review_rows: reviewState.rows, review_deleted: reviewState.deleted },
       });
       if (!dirName) return;
       const gaegangMsg = hasExisting ? "개강내역은 고른 파일을 갱신했습니다."

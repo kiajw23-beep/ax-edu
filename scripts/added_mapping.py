@@ -8,6 +8,10 @@
 - 값은 원본 그대로 옮기고 고치지 않는다(신청과정명 포함). 단, 교육시작일·교육종료일은 개강내역에서
   원본 신청명단(날짜 서식 셀)과 같은 날끼리 묶이도록 날짜로 읽어 맞춘다. 날짜로 읽지 못한 값은
   그대로 두고 확인필요 메모(pricing.INPUT_NOTE_COLUMN)를 남긴다. 연도가 없는 날짜는 추측하지 않는다.
+칸 맞추기 결과는 바로 반영하지 않고 "확인 표"(build_review_rows/check_review_rows)로 보여 준 뒤, 사람이
+고친 내용 그대로 표준 양식 파일(save_reviewed)을 만든다. 확인 표 검사는 기존 규칙(필수 칸, 날짜, 커리큘럼
+과정명, 중복, 제외 규칙, 도쿄일렉트론코리아)을 미리 보여 주는 것뿐이고 새 판단을 하지 않는다. 확인 표에서
+직접 고친 칸·직접 추가한 줄은 확인필요 메모로 남긴다.
 만든 표준 양식 파일은 기존 add_applications.run()에 그대로 넘긴다.
 """
 import csv
@@ -20,7 +24,9 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pricing import INPUT_NOTE_COLUMN  # noqa: E402
+from pricing import (  # noqa: E402
+    INPUT_NOTE_COLUMN, exclusion_reason, is_tel_row, load_price_table, normalize,
+)
 from process_apply_list import REQUIRED_COLUMNS  # noqa: E402
 
 # 이 칸들이 없으면 기업명·환급 판정·개강내역 묶음을 만들 수 없어서 꼭 맞춰야 한다.
@@ -149,4 +155,107 @@ def save_standard(sheets: dict, sheet: str, header_row: int, mapping: dict, outp
     bad_dates = int((df[INPUT_NOTE_COLUMN] != "").sum())
     if bad_dates:
         log(f"교육시작일·교육종료일을 날짜로 읽지 못한 추가 신청 {bad_dates}건 - 확인필요로 표시")
+    return output_path
+
+
+# ----- 확인 표 -----
+
+def _review_text(value) -> str:
+    """확인 표에 보여 줄 글자. 자정인 날짜는 날짜만 보여 준다."""
+    if isinstance(value, datetime):
+        stamp = pd.Timestamp(value)
+        return stamp.strftime("%Y-%m-%d") if stamp == stamp.normalize() else str(stamp)
+    return _cell_text(value)
+
+
+def review_columns(mapping: dict) -> list:
+    """확인 표에 보여 줄 칸: 필수 칸 + 칸 맞추기에서 고른 칸(원본 신청명단 칸 순서)."""
+    return [c for c in REQUIRED_COLUMNS if c in REQUIRED_FOR_ADDED or mapping.get(c) is not None]
+
+
+def build_review_rows(sheets: dict, sheet: str, header_row: int, mapping: dict) -> list:
+    """칸 맞추기 결과를 확인 표 줄 목록으로 만든다: [{칸 이름: 글자}]. 날짜는 B단계 규칙으로 맞춘 값이다."""
+    df = build_standard(sheets, sheet, header_row, mapping)
+    columns = review_columns(mapping)
+    return [{c: _review_text(row[c]) for c in columns} for _, row in df.iterrows()]
+
+
+def load_check_context(apply_path: str, refund_path: str, general_path: str) -> dict:
+    """확인 표 검사에 쓰는 원본 신청명단의 (아이디, 과정명)과 커리큘럼 과정명 목록."""
+    apply_df = pd.read_excel(apply_path)
+    refund_table = load_price_table(refund_path)
+    general_table = load_price_table(general_path)
+    return {
+        "base_keys": {(normalize(i), normalize(c)) for i, c in zip(apply_df["아이디"], apply_df["신청과정명"])},
+        "course_names": set(refund_table) | set(general_table),
+    }
+
+
+def course_names(context: dict) -> list:
+    return sorted(context["course_names"])
+
+
+def check_review_rows(rows: list, context: dict) -> list:
+    """줄마다 {"cells": 노란색으로 표시할 칸 이름들, "messages": 확인 내용}을 돌려준다."""
+    keys = [(normalize(r.get("아이디", "")), normalize(r.get("신청과정명", ""))) for r in rows]
+    results = []
+    for row, key in zip(rows, keys):
+        cells, messages = [], []
+        empty = [c for c in REQUIRED_FOR_ADDED if not _cell_text(row.get(c))]
+        if empty:
+            cells += empty
+            messages.append(f"필수 칸이 비어 있음: {', '.join(empty)}")
+        for col in DATE_COLUMNS:
+            if _cell_text(row.get(col)) and not to_date(row.get(col))[1]:
+                cells.append(col)
+                messages.append(f"{col}을 날짜로 읽지 못함")
+        course = _cell_text(row.get("신청과정명"))
+        if course and normalize(course) not in context["course_names"]:
+            cells.append("신청과정명")
+            messages.append("과정명이 환급·비환급 커리큘럼 어디에도 없음")
+        if all(key) and key in context["base_keys"]:
+            messages.append("원본 신청명단에 같은 아이디·과정명 신청이 이미 있음")
+        if all(key) and keys.count(key) > 1:
+            messages.append("확인 표 안에 같은 아이디·과정명 줄이 또 있음")
+        reason = exclusion_reason(row)
+        if reason:
+            messages.append(f"제외 규칙({reason})에 해당 - 이 줄은 결과에서 빠집니다")
+        if is_tel_row(row):
+            messages.append("도쿄일렉트론코리아 신청 - 1~3단계 결과에서 빠집니다")
+        results.append({"cells": cells, "messages": messages})
+    return results
+
+
+def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> str:
+    """확인 표 내용을 표준 양식으로 저장한다. rows: [{"values": {칸: 글자}, "original": {칸: 글자} 또는 None}]
+    (original이 None이면 확인 표에서 직접 추가한 줄). 직접 고친 칸·추가한 줄은 확인필요 메모로 남긴다."""
+    records, notes = [], []
+    edited = added = 0
+    for r in rows:
+        values, original = r["values"], r.get("original")
+        record = {c: (_cell_text(values.get(c)) or None) for c in REQUIRED_COLUMNS}
+        note = []
+        for col in DATE_COLUMNS:
+            if record[col] is not None:
+                date, ok = to_date(record[col])
+                record[col] = date
+                if not ok:
+                    note.append(f"{col}을 날짜로 읽지 못함(입력값: {values.get(col)}) - 날짜 확인필요")
+            else:
+                note.append(f"{col}을 날짜로 읽지 못함(입력값: 빈칸) - 날짜 확인필요")
+        if original is None:
+            added += 1
+            note.append("확인 표에서 직접 추가한 줄")
+        else:
+            changes = [f"{c}(원래 값: {_cell_text(original.get(c)) or '빈칸'})" for c in values
+                       if _cell_text(values.get(c)) != _cell_text(original.get(c))]
+            if changes:
+                edited += 1
+                note.append("확인 표에서 직접 수정: " + ", ".join(changes))
+        records.append(record)
+        notes.append(" / ".join(note))
+    df = pd.DataFrame(records, columns=REQUIRED_COLUMNS, dtype=object)
+    df[INPUT_NOTE_COLUMN] = notes
+    df.to_excel(output_path, index=False)
+    log(f"확인 표: 추가 신청 {len(df)}건 반영 (직접 수정 {edited}건, 직접 추가 {added}건, 삭제 {deleted}건)")
     return output_path
