@@ -232,7 +232,8 @@ body {
   gap: 8px;
 }
 
-.date-range-inputs input[type="date"] {
+.date-range-inputs input[type="date"],
+.date-range-inputs input[type="text"] {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
@@ -505,4 +506,383 @@ body {
   .file-row .pick {
     grid-column: 2;
   }
+}
+
+/* 추가 신청 칸 맞추기 (웹 버전) */
+.mapping {
+  background: var(--brand-soft);
+  border-radius: var(--radius-well);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.mapping.hidden,
+.mapping #map-body.hidden {
+  display: none;
+}
+
+.mapping-head {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.mapping-head .hint,
+.mapping-status {
+  color: var(--brand-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.mapping-status:empty {
+  display: none;
+}
+
+#map-body {
+  display: grid;
+  gap: 10px;
+}
+
+.mapping-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.mapping select,
+.mapping input[type="number"] {
+  border: 1px solid var(--brand-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.mapping input[type="number"] {
+  width: 64px;
+}
+
+.mapping-preview-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.mapping-preview {
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mapping-preview td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mapping-preview td.rowno {
+  color: var(--muted);
+  text-align: right;
+}
+
+.mapping-preview tr.header-row td {
+  background: #fff59d;
+  font-weight: 600;
+}
+
+.mapping-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 12px;
+}
+
+.mapping-field {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.mapping-field select {
+  min-width: 0;
+  width: 100%;
+}
+
+.mapping-field.missing span {
+  color: #fff59d;
+  font-weight: 600;
+}
+
+/* 추가 신청 넣는 방법: 파일 / 붙여넣기 (웹 버전) */
+.source-toggle {
+  display: inline-flex;
+  justify-self: start;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+}
+
+.source-toggle .toggle {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.source-toggle .toggle.active {
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.file-row.hidden,
+.paste-box.hidden {
+  display: none;
+}
+
+.paste-box {
+  background: var(--brand-soft);
+  border-radius: var(--radius-well);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.paste-box .hint {
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
+.paste-box textarea {
+  width: 100%;
+  border: 1px solid var(--brand-line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.card.dark .paste-box .btn {
+  margin-top: 0;
+  justify-self: end;
+}
+
+/* 확인 표 (웹 버전) */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-buttons .btn {
+  margin-top: 0;
+}
+
+.modal-buttons .btn.hidden {
+  display: none;
+}
+
+.card.dark .mapping .btn.review-build {
+  margin-top: 0;
+  justify-self: start;
+}
+
+.review {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.review.hidden {
+  display: none;
+}
+
+.review .hint {
+  color: var(--brand-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card.dark .review-head .btn {
+  margin: 0 0 0 auto;
+  height: 28px;
+  font-size: 12px;
+}
+
+.review-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.review-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text);
+  min-width: 100%;
+}
+
+.review-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--well);
+}
+
+.review-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 3px 4px;
+  vertical-align: top;
+}
+
+.review-table td.rowno {
+  color: var(--muted);
+  text-align: right;
+  padding-top: 7px;
+}
+
+.review-table input {
+  width: 100%;
+  min-width: 90px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  padding: 4px 6px;
+}
+
+.review-table input:focus {
+  outline: none;
+  border-color: var(--brand-line);
+  background: var(--surface);
+}
+
+.review-table td.warn input {
+  background: #fff59d;
+}
+
+.review-table td.messages {
+  min-width: 200px;
+  padding-top: 7px;
+  color: #8a5a00;
+  white-space: pre-line;
+}
+
+.review-table button.delete {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+}
+
+.review-table button.delete:hover {
+  color: var(--text);
+}
+
+/* 칸 맞추기 자동 선택 표시 (웹 버전) */
+.mapping-field .auto-tag {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-line);
+  color: var(--brand-ink);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.mapping-field .auto-tag.hidden {
+  display: none;
+}
+
+/* 날짜 직접 입력 + 달력 버튼 (웹 버전) */
+.calendar-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calendar-btn:hover {
+  background: var(--well-hover);
+}
+
+/* 달력 창만 띄우는 용도라 보이지 않게 둔다(display:none이면 달력이 안 열림).
+   .date-range-inputs input[type="date"] 스타일보다 앞서도록 선택자를 맞춘다. */
+.calendar-picker,
+.date-range-inputs input.calendar-picker {
+  flex: none;
+  min-width: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mapping-field .fixed-date {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mapping-field .fixed-date.hidden {
+  display: none;
+}
+
+.mapping-field .fixed-date input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--brand-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.mapping-field .fixed-date input.invalid {
+  background: #fff59d;
+}
+
+.mapping-field .fixed-date .calendar-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
 }
