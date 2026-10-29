@@ -253,7 +253,9 @@
   const pasteBox = document.getElementById("paste-box");
   const pasteText = document.getElementById("paste-text");
   // source: 칸 맞추기 화면이 어떤 내용을 읽었는지("file" | "paste"), 아직 없으면 null
-  const mapState = { ready: false, source: null, sheet: null, headerRow: 1, columns: [], mapping: {}, auto: new Set() };
+  const mapState = {
+    ready: false, source: null, sheet: null, headerRow: 1, columns: [], mapping: {}, auto: new Set(), fixedText: {},
+  };
   let addedMode = "file"; // ⑤ 추가 신청을 넣는 방법: "file" | "paste"
   let mapColumns = null; // { all: 원본 신청명단 칸, required: 꼭 맞춰야 하는 칸 }
 
@@ -264,7 +266,9 @@
   }
 
   function missingRequiredColumns() {
-    return mapColumns ? mapColumns.required.filter((c) => mapState.mapping[c] === undefined) : [];
+    if (!mapColumns) return [];
+    return mapColumns.required.filter((c) => mapState.mapping[c] === undefined)
+      .map((c) => (mapState.fixedText[c] !== undefined ? `${c}(직접 입력한 날짜를 확인해주세요)` : c));
   }
 
   function resetMapping() {
@@ -390,6 +394,7 @@
     mapState.columns = info.columns;
     mapState.mapping = { ...info.suggested };
     mapState.auto = new Set(Object.keys(info.suggested)); // 자동으로 고른 칸(사용자가 바꾸면 빠짐)
+    mapState.fixedText = {}; // "직접 입력"을 고른 칸 -> 입력한 글자
     renderPreview(info.first_rows);
     renderFields();
   }
@@ -413,10 +418,15 @@
     });
   }
 
+  // 교육시작일·교육종료일은 파일에 칸이 없으면 "직접 입력"으로 날짜를 정해 모든 줄에 같이 넣을 수 있다.
+  const FIXED_DATE_FIELDS = ["교육시작일", "교육종료일"];
+  const FIXED = "fixed";
+
   function renderFields() {
     mapFields.innerHTML = "";
     mapColumns.all.forEach((target) => {
       const required = mapColumns.required.includes(target);
+      const canFix = FIXED_DATE_FIELDS.includes(target);
       const field = document.createElement("label");
       field.className = "mapping-field";
       const name = document.createElement("span");
@@ -426,6 +436,12 @@
       none.value = "";
       none.textContent = required ? "(골라주세요)" : "(없음 - 비워 둠)";
       select.appendChild(none);
+      if (canFix) {
+        const fixed = document.createElement("option");
+        fixed.value = FIXED;
+        fixed.textContent = "직접 입력 (모든 줄에 같은 날짜)";
+        select.appendChild(fixed);
+      }
       mapState.columns.forEach((col) => {
         const option = document.createElement("option");
         option.value = String(col.index);
@@ -437,26 +453,71 @@
       autoTag.textContent = "자동";
       autoTag.title = "칸 이름이 비슷해서 자동으로 골랐습니다. 맞는지 확인해주세요.";
       name.appendChild(autoTag);
+
+      const fixedBox = document.createElement("div");
+      fixedBox.className = "fixed-date hidden";
+      const fixedInput = document.createElement("input");
+      fixedInput.type = "text";
+      fixedInput.inputMode = "numeric";
+      fixedInput.placeholder = "예: 2026-11-02";
+      fixedInput.autocomplete = "off";
+      fixedInput.value = mapState.fixedText[target] || "";
+      fixedBox.appendChild(fixedInput);
+      if (canFix) attachCalendar(fixedInput);
+
+      const currentValue = () => (mapState.fixedText[target] !== undefined ? FIXED
+        : mapState.mapping[target] === undefined ? "" : String(mapState.mapping[target]));
       const update = () => {
         field.classList.toggle("missing", required && mapState.mapping[target] === undefined);
         autoTag.classList.toggle("hidden", !mapState.auto.has(target));
+        fixedBox.classList.toggle("hidden", mapState.fixedText[target] === undefined);
+        fixedInput.classList.toggle("invalid", Boolean(fixedInput.value.trim()) && !parseDateText(fixedInput.value));
       };
-      if (mapState.mapping[target] !== undefined) select.value = String(mapState.mapping[target]);
+      // 직접 입력한 날짜는 읽을 수 있을 때만 칸 맞추기 값이 된다(못 읽으면 아직 안 고른 것으로 봄).
+      const applyFixed = () => {
+        mapState.fixedText[target] = fixedInput.value;
+        const parsed = parseDateText(fixedInput.value);
+        if (parsed) {
+          fixedInput.value = parsed;
+          mapState.fixedText[target] = parsed;
+          mapState.mapping[target] = parsed;
+        } else {
+          delete mapState.mapping[target];
+        }
+      };
+      select.value = currentValue();
       select.addEventListener("change", async () => {
         const chosen = select.value;
-        select.value = mapState.mapping[target] === undefined ? "" : String(mapState.mapping[target]);
+        select.value = currentValue();
         if (!(await confirmDiscardReview())) return;
         select.value = chosen;
         mapState.auto.delete(target);
-        if (select.value === "") delete mapState.mapping[target];
-        else mapState.mapping[target] = Number(select.value);
+        delete mapState.fixedText[target];
+        delete mapState.mapping[target];
+        if (chosen === FIXED) {
+          applyFixed();
+        } else if (chosen !== "") {
+          mapState.mapping[target] = Number(chosen);
+        }
+        update();
+        if (chosen === FIXED) fixedInput.focus();
+      });
+      fixedInput.addEventListener("input", update);
+      fixedInput.addEventListener("change", async () => {
+        if (!(await confirmDiscardReview())) {
+          fixedInput.value = mapState.fixedText[target] || "";
+          update();
+          return;
+        }
+        applyFixed();
         update();
       });
       update();
-      field.append(name, select);
+      field.append(name, select, fixedBox);
       mapFields.appendChild(field);
     });
   }
+
 
   mapSheet.addEventListener("change", async () => {
     const chosen = mapSheet.value;
@@ -682,11 +743,43 @@
     return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
 
+  // 날짜 글자 칸 옆에 달력 버튼을 붙인다. 달력에서 고르면 2026-11-02 모양으로 글자 칸에 들어간다.
+  function attachCalendar(textInput) {
+    const picker = document.createElement("input");
+    picker.type = "date";
+    picker.className = "calendar-picker";
+    picker.tabIndex = -1;
+    picker.setAttribute("aria-hidden", "true");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "calendar-btn";
+    button.title = "달력에서 고르기";
+    button.setAttribute("aria-label", "달력에서 고르기");
+    button.textContent = "📅";
+    button.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      picker.value = parseDateText(textInput.value) || "";
+      try {
+        picker.showPicker();
+      } catch (e) {
+        picker.focus();
+      }
+    });
+    picker.addEventListener("change", () => {
+      if (!picker.value) return;
+      textInput.value = picker.value;
+      textInput.dispatchEvent(new Event("input", { bubbles: true }));
+      textInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    textInput.after(button, picker);
+  }
+
   [dateStartInput, dateEndInput].forEach((input) => {
     input.addEventListener("blur", () => {
       const parsed = parseDateText(input.value);
       if (parsed) input.value = parsed;
     });
+    attachCalendar(input);
   });
 
   function validate(requiredSlots, missingMessage) {

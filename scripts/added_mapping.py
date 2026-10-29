@@ -217,16 +217,24 @@ def _column_letter(idx: int) -> str:
 
 
 def build_standard(sheets: dict, sheet: str, header_row: int, mapping: dict) -> pd.DataFrame:
-    """mapping: {원본 칸 이름: 추가 신청 파일의 칸 index}. 없는 칸은 비워 둔다.
-    제목 줄 아래에서 맞춘 칸이 전부 비어 있는 줄(빈 줄·합계 아래 여백 등)은 뺀다."""
+    """mapping: {원본 칸 이름: 추가 신청 파일의 칸 index 또는 직접 입력한 값(글자)}. 없는 칸은 비워 둔다.
+    직접 입력한 값(예: 파일에 교육시작일 칸이 없어 사용자가 정한 날짜)은 모든 줄에 똑같이 넣는다.
+    제목 줄 아래에서 파일에서 맞춘 칸이 전부 비어 있는 줄(빈 줄·합계 아래 여백 등)은 뺀다."""
     missing = [c for c in REQUIRED_FOR_ADDED if mapping.get(c) is None]
     if missing:
         raise ValueError(f"추가 신청 파일에서 다음 칸을 맞춰야 합니다: {missing}")
     data = sheets[sheet].iloc[header_row:].reset_index(drop=True)
-    out = pd.DataFrame({c: (data[mapping[c]] if mapping.get(c) is not None else pd.Series([None] * len(data),
-                                                                                          dtype=object))
-                        for c in REQUIRED_COLUMNS})
-    mapped_cols = [c for c in REQUIRED_COLUMNS if mapping.get(c) is not None]
+
+    def column(c):
+        source = mapping.get(c)
+        if source is None:
+            return pd.Series([None] * len(data), dtype=object)
+        if isinstance(source, str):
+            return pd.Series([source] * len(data), dtype=object)
+        return data[source]
+
+    out = pd.DataFrame({c: column(c) for c in REQUIRED_COLUMNS})
+    mapped_cols = [c for c in REQUIRED_COLUMNS if mapping.get(c) is not None and not isinstance(mapping[c], str)]
     not_empty = out[mapped_cols].apply(lambda r: any(_cell_text(v) for v in r), axis=1)
     out = out[not_empty].reset_index(drop=True)
 

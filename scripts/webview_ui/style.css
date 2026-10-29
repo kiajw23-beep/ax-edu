@@ -605,7 +605,7 @@ body {
 
 .mapping-field {
   display: grid;
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 84px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   font-size: 12px;
@@ -821,4 +821,68 @@ body {
 
 .mapping-field .auto-tag.hidden {
   display: none;
+}
+
+/* 날짜 직접 입력 + 달력 버튼 (웹 버전) */
+.calendar-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calendar-btn:hover {
+  background: var(--well-hover);
+}
+
+/* 달력 창만 띄우는 용도라 보이지 않게 둔다(display:none이면 달력이 안 열림).
+   .date-range-inputs input[type="date"] 스타일보다 앞서도록 선택자를 맞춘다. */
+.calendar-picker,
+.date-range-inputs input.calendar-picker {
+  flex: none;
+  min-width: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mapping-field .fixed-date {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mapping-field .fixed-date.hidden {
+  display: none;
+}
+
+.mapping-field .fixed-date input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--brand-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.mapping-field .fixed-date input.invalid {
+  background: #fff59d;
+}
+
+.mapping-field .fixed-date .calendar-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
 }
