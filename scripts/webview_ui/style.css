@@ -682,7 +682,31 @@ body {
 
 .card.dark .paste-box .btn {
   margin-top: 0;
-  justify-self: end;
+}
+
+.paste-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-status {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 12px;
+  white-space: pre-line;
+}
+
+.ai-status:empty {
+  display: none;
+}
+
+/* AI로 읽은 경우: 칸 맞추기 없이 확인 표만 보여 준다. */
+.mapping.ai-mode .mapping-opts,
+.mapping.ai-mode .mapping-preview-wrap,
+.mapping.ai-mode .mapping-fields,
+.mapping.ai-mode .review-build {
+  display: none;
 }
 
 /* 확인 표 (웹 버전) */

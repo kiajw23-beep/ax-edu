@@ -271,12 +271,20 @@
       .map((c) => (mapState.fixedText[c] !== undefined ? `${c}(직접 입력한 날짜를 확인해주세요)` : c));
   }
 
+  const mapTitle = document.getElementById("map-title");
+  const mapHint = document.getElementById("map-hint");
+  const MAP_TITLE = mapTitle.textContent;
+  const MAP_HINT = mapHint.textContent;
+
   function resetMapping() {
     clearReview();
     mapState.ready = false;
     mapState.source = null;
     if (pyodide) pyodide.runPython("globals().pop('_map_sheets', None)");
     mapEl.classList.add("hidden");
+    mapEl.classList.remove("ai-mode");
+    mapTitle.textContent = MAP_TITLE;
+    mapHint.textContent = MAP_HINT;
   }
 
   // readSheets: _map_sheets를 채우는 함수. 읽는 사이에 다른 내용으로 바뀌었으면 false를 돌려준다.
@@ -355,7 +363,7 @@
     if (!text.includes("\t")) {
       showModal("알려드립니다", "붙여넣은 내용이 표 형식이 아닙니다(칸 구분이 없음).\n"
         + "엑셀이나 메일의 표를 칸 이름 줄과 함께 복사해서 붙여넣어 주세요. "
-        + "메일 본문 문장·카톡 같은 글은 다음 단계(브라우저 안 LLM)에서 지원할 예정입니다.");
+        + "메일 본문 문장·카톡 같은 글이면 \"AI로 글 읽기\"를 눌러주세요.");
       return;
     }
     if (!pyodide) {
@@ -376,7 +384,8 @@
 
   // 표를 읽은 뒤 붙여넣은 내용을 고치면 칸 맞추기를 다시 해야 한다.
   pasteText.addEventListener("input", () => {
-    if (mapState.source === "paste") resetMapping();
+    if (mapState.source === "paste" || mapState.source === "ai") resetMapping();
+    aiStatus.textContent = "";
   });
 
   // 위쪽 줄 중 원본 칸 이름과 가장 많이 맞는 줄을 칸 이름 줄로 골라 둔다(사용자가 숫자로 바꿀 수 있음).
@@ -720,6 +729,175 @@
     }
   }
 
+  // ----- 브라우저 안 AI로 글 읽기 (WebLLM) -----
+  // 메일 본문·카톡처럼 표가 아닌 글을 AI가 신청자별로 나눠 읽고, 확인 표(C단계)를 채운다.
+  // 붙여넣은 글은 이 브라우저 안에서만 처리하고 어디로도 보내지 않는다(모델 파일만 처음 한 번 내려받음).
+  // AI가 채운 값은 원문과 대조하고, AI로 읽은 줄은 모두 확인필요로 남긴다(scripts/added_mapping.py).
+  const WEBLLM_URL = "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm";
+  const AI_MODEL_ID = "Qwen2.5-3B-Instruct-q4f16_1-MLC";
+  // 모델이 한 번에 다룰 수 있는 길이(4,096토큰)에 지시문·답까지 들어가야 해서 글 길이를 제한한다.
+  const AI_MAX_CHARS = 2000;
+  const AI_KEYS = ["company", "name", "user_id", "course", "start_date", "end_date", "phone", "email", "birth", "type"];
+  const AI_SCHEMA = {
+    type: "object",
+    properties: {
+      applicants: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: Object.fromEntries(AI_KEYS.map((k) => [k, { type: "string" }])),
+          required: AI_KEYS,
+        },
+      },
+    },
+    required: ["applicants"],
+  };
+  const AI_SYSTEM_PROMPT = [
+    "너는 교육 추가 신청 글(메일 본문, 메신저 대화 등)에서 수강생 정보를 뽑아 JSON으로만 답한다.",
+    '답 형식: {"applicants": [{"company": "", "name": "", "user_id": "", "course": "", "start_date": "", '
+      + '"end_date": "", "phone": "", "email": "", "birth": "", "type": ""}]}',
+    "칸 뜻: company=회사명, name=수강생 이름, user_id=아이디(ID), course=신청 과정명(교육명), "
+      + "start_date=교육 시작일, end_date=교육 종료일, phone=휴대전화, email=이메일, "
+      + "birth=생년월일 또는 주민등록번호, type=신청 구분(사업주/일반 등).",
+    "규칙:",
+    "1. 글에 적힌 글자를 그대로 옮긴다. 맞춤법·띄어쓰기·날짜 모양을 고치지 않는다.",
+    '2. 글에 없는 정보는 ""로 둔다. 추측하거나 만들어 내지 않는다. 날짜에 연도가 없으면 연도를 붙이지 않는다.',
+    "3. 수강생 한 명이 applicants의 한 항목이다. 한 사람이 과정을 여러 개 신청하면 과정마다 한 항목으로 나눈다.",
+    "4. 회사명·과정명·교육일정처럼 여러 수강생에게 공통으로 적힌 정보는 해당하는 모든 수강생에게 넣는다.",
+    "5. 글을 보낸 사람·담당자·서명처럼 수강생이 아닌 사람은 넣지 않는다.",
+    '6. 수강생이 없으면 {"applicants": []}로 답한다.',
+  ].join("\n");
+
+  const aiStatus = document.getElementById("ai-status");
+  const aiButton = document.getElementById("paste-ai");
+  const pasteReadButton = document.getElementById("paste-read");
+  let webllm = null;
+  let aiEngine = null;
+
+  async function aiSupported() {
+    if (!navigator.gpu) return false;
+    try {
+      return Boolean(await navigator.gpu.requestAdapter());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 처음 한 번은 모델(약 2GB)을 내려받아야 하므로 먼저 묻는다. 받은 모델은 브라우저에 저장되어 다음부터 바로 쓴다.
+  async function ensureAiEngine() {
+    if (aiEngine) return true;
+    if (!webllm) webllm = await import(WEBLLM_URL);
+    const cached = await webllm.hasModelInCache(AI_MODEL_ID).catch(() => false);
+    if (!cached && !(await showConfirm("AI 모델 내려받기",
+      "AI로 글을 읽으려면 처음 한 번 AI 모델(약 2GB)을 내려받아야 합니다. 몇 분 걸릴 수 있습니다.\n"
+      + "받은 모델은 이 브라우저에 저장되어 다음부터는 바로 씁니다. 붙여넣은 글은 이 PC 밖으로 보내지 않습니다.\n\n"
+      + "지금 내려받을까요?"))) {
+      return false;
+    }
+    aiStatus.textContent = "AI 모델을 준비하는 중입니다...";
+    aiEngine = await webllm.CreateMLCEngine(AI_MODEL_ID, {
+      initProgressCallback: (report) => {
+        const percent = Math.round((report.progress || 0) * 100);
+        aiStatus.textContent = `AI 모델을 준비하는 중입니다... ${percent}%`
+          + (cached ? "" : "\n처음 한 번은 내려받느라 몇 분 걸립니다. 이 창을 닫지 마세요.");
+      },
+    });
+    return true;
+  }
+
+  function showAiReview() {
+    mapEl.classList.remove("hidden");
+    mapEl.classList.add("ai-mode");
+    mapBody.classList.remove("hidden");
+    mapStatus.textContent = "";
+    mapTitle.textContent = "AI로 읽은 추가 신청";
+    mapHint.textContent = "AI가 글에서 읽은 내용입니다. 아래 확인 표에서 원문과 하나씩 대조해 확인·수정해주세요. "
+      + "AI로 읽은 줄은 결과 파일에 확인필요로 남습니다.";
+  }
+
+  aiButton.addEventListener("click", async () => {
+    const text = pasteText.value.trim();
+    if (!text) {
+      showModal("알려드립니다", "붙여넣은 내용이 없습니다. 메일 본문·카톡 글을 붙여넣어 주세요.");
+      return;
+    }
+    if (text.length > AI_MAX_CHARS) {
+      showModal("알려드립니다", `글이 너무 깁니다(${text.length.toLocaleString()}자). `
+        + `AI는 한 번에 약 ${AI_MAX_CHARS.toLocaleString()}자까지 읽을 수 있습니다. 나눠서 붙여넣어 주세요.`);
+      return;
+    }
+    if (!pyodide) {
+      showModal("잠시만요", "처리 도구를 불러오는 중입니다. 잠시 후 다시 눌러주세요.");
+      return;
+    }
+    if (!(state.apply && state.refund && state.general)) {
+      showModal("알려드립니다", "AI로 읽은 내용은 ① 신청명단 / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼과 비교해 검사합니다. "
+        + "①②③ 파일을 먼저 골라주세요.");
+      return;
+    }
+    if (!(await aiSupported())) {
+      showModal("알려드립니다", "이 PC(브라우저)에서는 AI 읽기를 쓸 수 없습니다(WebGPU를 지원하지 않음).\n"
+        + "Chrome·Edge 최신 버전인지 확인해주세요. 표 붙여넣기나 파일 올리기는 그대로 쓸 수 있습니다.");
+      return;
+    }
+    if (!(await confirmDiscardReview())) return;
+    aiButton.disabled = true;
+    pasteReadButton.disabled = true;
+    setButtonsDisabled(true);
+    try {
+      if (!(await ensureAiEngine())) {
+        aiStatus.textContent = "";
+        return;
+      }
+      aiStatus.textContent = "AI가 글을 읽는 중입니다... (몇 초~수십 초)";
+      const reply = await aiEngine.chat.completions.create({
+        messages: [{ role: "system", content: AI_SYSTEM_PROMPT }, { role: "user", content: text }],
+        temperature: 0,
+        max_tokens: 1500,
+        response_format: { type: "json_object", schema: JSON.stringify(AI_SCHEMA) },
+      });
+      const choice = reply.choices[0];
+      if (choice.finish_reason === "length") {
+        throw new Error("AI 답이 길이 제한에 걸려 잘렸습니다. 글을 나눠서 다시 읽어주세요.");
+      }
+      const applicants = JSON.parse(choice.message.content).applicants || [];
+      if (pasteText.value.trim() !== text) return; // 읽는 사이에 글을 고쳤음
+      resetMapping();
+      await loadReviewContext();
+      const applicantsPy = pyodide.toPy(applicants);
+      let rows;
+      try {
+        pyodide.globals.set("_ai_applicants", applicantsPy);
+        pyodide.globals.set("_ai_text", text);
+        rows = pyToJs(pyodide.runPython(
+          "_rows = added_mapping.build_review_rows_from_ai(_ai_applicants, _ai_text, _review_ctx)\n"
+          + "globals().pop('_ai_applicants', None)\nglobals().pop('_ai_text', None)\n_rows"));
+      } finally {
+        applicantsPy.destroy();
+      }
+      if (!rows.length) {
+        aiStatus.textContent = "";
+        showModal("알려드립니다", "AI가 글에서 수강생을 찾지 못했습니다. 글 내용을 확인하거나 표로 붙여넣어 주세요.");
+        return;
+      }
+      reviewState.columns = pyToJs(pyodide.runPython("added_mapping.ai_columns()"));
+      reviewState.rows = rows.map((r) => ({ ...r, original: { ...r.values } }));
+      reviewState.built = true;
+      mapState.source = "ai";
+      mapState.ready = true;
+      showAiReview();
+      renderReview();
+      aiStatus.textContent = `AI가 ${rows.length}명을 읽었습니다. 아래 확인 표에서 원문과 대조해 확인해주세요.`;
+    } catch (e) {
+      aiStatus.textContent = "";
+      showModal("알려드립니다", "AI로 글을 읽지 못했습니다.\n" + (e && e.message ? e.message : e));
+    } finally {
+      aiButton.disabled = false;
+      pasteReadButton.disabled = false;
+      setButtonsDisabled(false);
+    }
+  });
+
   // ----- 실행 -----
   const saveTelCheckbox = document.getElementById("save-tel");
   const dateStartInput = document.getElementById("date-start");
@@ -892,7 +1070,8 @@
       const hasExisting = Boolean(state.existing_gaegang);
       const missingMessage = "① 신청명단(원본) / ② 환급과정 커리큘럼 / ③ 비환급과정 커리큘럼 / "
         + "⑤ 추가 신청(파일 또는 붙여넣기)을 모두 넣어야 합니다. ⑥ 기존 개강내역 파일은 선택사항입니다.";
-      const hasAdded = addedMode === "file" ? Boolean(state.added) : mapState.source === "paste";
+      const hasAdded = addedMode === "file" ? Boolean(state.added)
+        : mapState.source === "paste" || mapState.source === "ai";
       if (!(state.apply && state.refund && state.general && hasAdded)) {
         showModal("알려드립니다", addedMode === "paste" && pasteText.value.trim() && !mapState.source
           ? "붙여넣은 내용 아래의 \"표 읽기\"를 먼저 눌러주세요." : missingMessage);

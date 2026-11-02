@@ -19,6 +19,8 @@
 직접 고친 칸·직접 추가한 줄은 확인필요 메모로 남긴다. 추가 신청의 신청과정명이 커리큘럼에 (공백 차이 빼고) 똑같이
 없으면 가장 비슷한 커리큘럼 과정명을 골라 넣고(suggest_course) 확인필요로 표시한다. 원본 신청명단의 과정명은
 이 추정을 하지 않고 절대 바꾸지 않는다.
+표가 아닌 글(메일 본문·카톡)은 브라우저 안 AI(web/app.js)가 신청자별로 나눠 읽고, build_review_rows_from_ai로
+같은 확인 표를 만든다. AI가 채운 값이 붙여넣은 원문에 없으면 표시하고, AI로 읽은 줄은 모두 확인필요로 남긴다.
 만든 표준 양식 파일은 기존 add_applications.run()에 그대로 넘긴다.
 """
 import csv
@@ -331,14 +333,57 @@ def build_review_rows(sheets: dict, sheet: str, header_row: int, mapping: dict, 
     rows = []
     for _, row in df.iterrows():
         values = {c: _review_text(row[c]) for c in columns}
-        auto = {}
-        course = values.get("신청과정명", "")
-        if course and normalize(course) not in context["course_names"]:
-            picked = suggest_course(course, context["course_names"])["course"]
-            if picked:
-                auto["신청과정명"] = course
-                values["신청과정명"] = picked
-        rows.append({"values": values, "auto": auto})
+        rows.append({"values": values, "auto": _suggest_course_into(values, context)})
+    return rows
+
+
+def _suggest_course_into(values: dict, context: dict) -> dict:
+    """신청과정명이 커리큘럼에 없으면 가장 비슷한 과정명으로 바꿔 넣고 {"신청과정명": 원래 글자}를 돌려준다."""
+    course = values.get("신청과정명", "")
+    if course and normalize(course) not in context["course_names"]:
+        picked = suggest_course(course, context["course_names"])["course"]
+        if picked:
+            values["신청과정명"] = picked
+            return {"신청과정명": course}
+    return {}
+
+
+# ----- 브라우저 안 AI로 글 읽기 -----
+
+# AI가 글에서 읽는 칸(원본 신청명단 칸 이름 -> AI 답의 JSON 키). AI 답은 영문 키로 받아 여기서 바꾼다.
+AI_FIELDS = {
+    "회사명": "company", "성함": "name", "아이디": "user_id", "신청과정명": "course",
+    "교육시작일": "start_date", "교육종료일": "end_date", "휴대전화": "phone", "메일주소": "email",
+    "생년월일": "birth", "구분": "type",
+}
+
+
+def ai_columns() -> list:
+    """AI로 읽은 확인 표에 보여 줄 칸(원본 신청명단 칸 순서)."""
+    return [c for c in REQUIRED_COLUMNS if c in AI_FIELDS]
+
+
+def _source_key(text) -> str:
+    return re.sub(r"\s+", "", str(text)).lower()
+
+
+def build_review_rows_from_ai(applicants: list, source_text: str, context: dict) -> list:
+    """AI 답(applicants: [{영문 키: 글자}])을 확인 표 줄로 만든다.
+    줄마다 {"values", "auto", "ai": True, "ai_missing": 붙여넣은 원문에서 찾을 수 없는 칸들}.
+    날짜·생년월일·과정명은 칸 맞추기와 같은 규칙으로 맞춘다. 칸이 전부 빈 줄은 뺀다."""
+    source = _source_key(source_text)
+    columns = ai_columns()
+    rows = []
+    for applicant in applicants:
+        raw = {c: _cell_text(applicant.get(key)) for c, key in AI_FIELDS.items()}
+        if not any(raw.values()):
+            continue
+        missing = [c for c in columns if raw[c] and _source_key(raw[c]) not in source]
+        record = {c: (raw.get(c) or None) for c in REQUIRED_COLUMNS}
+        convert_record(record)
+        values = {c: _review_text(record[c]) for c in columns}
+        rows.append({"values": values, "auto": _suggest_course_into(values, context), "ai": True,
+                     "ai_missing": missing})
     return rows
 
 
@@ -365,11 +410,17 @@ def check_review_rows(rows: list, context: dict) -> list:
     auto_list = [{c: before for c, before in (r.get("auto") or {}).items()
                   if r.get("original") and _cell_text(r["values"].get(c)) == _cell_text(r["original"].get(c))}
                  for r in rows]
+    ai_list = [_unchanged_ai_missing(r) if r.get("ai") else None for r in rows]
     rows = [r["values"] for r in rows]
     keys = [(normalize(r.get("아이디", "")), normalize(r.get("신청과정명", ""))) for r in rows]
     results = []
-    for row, key, auto in zip(rows, keys, auto_list):
+    for row, key, auto, ai_missing in zip(rows, keys, auto_list, ai_list):
         cells, messages = [], []
+        if ai_missing is not None:
+            messages.append("AI가 글에서 읽은 줄 - 원문과 대조해 확인")
+            if ai_missing:
+                cells += ai_missing
+                messages.append(f"원문에서 찾을 수 없는 값: {', '.join(ai_missing)}")
         empty = [c for c in REQUIRED_FOR_ADDED if not _cell_text(row.get(c))]
         if empty:
             cells += empty
@@ -405,6 +456,13 @@ def check_review_rows(rows: list, context: dict) -> list:
     return results
 
 
+def _unchanged_ai_missing(row: dict) -> list:
+    """AI가 채웠는데 원문에 없던 칸 중, 사람이 아직 고치지 않은 칸."""
+    original = row.get("original") or {}
+    return [c for c in row.get("ai_missing") or []
+            if _cell_text(row["values"].get(c)) == _cell_text(original.get(c))]
+
+
 def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> str:
     """확인 표 내용을 표준 양식으로 저장한다. rows: [{"values": {칸: 글자}, "original": {칸: 글자} 또는 None}]
     (original이 None이면 확인 표에서 직접 추가한 줄). 직접 고친 칸·추가한 줄은 확인필요 메모로 남긴다."""
@@ -415,6 +473,10 @@ def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> 
         record = {c: (_cell_text(values.get(c)) or None) for c in REQUIRED_COLUMNS}
         note = convert_record(record)
         auto = r.get("auto") or {}
+        if r.get("ai"):
+            ai_missing = _unchanged_ai_missing(r)
+            note.append("AI가 글에서 읽은 줄" + (f"(원문에 없는 값: {', '.join(ai_missing)})" if ai_missing else "")
+                        + " - 확인필요")
         if original is None:
             added += 1
             note.append("확인 표에서 직접 추가한 줄")
@@ -433,5 +495,7 @@ def save_reviewed(rows: list, output_path: str, deleted: int = 0, log=print) -> 
     df = pd.DataFrame(records, columns=REQUIRED_COLUMNS, dtype=object)
     df[INPUT_NOTE_COLUMN] = notes
     df.to_excel(output_path, index=False)
-    log(f"확인 표: 추가 신청 {len(df)}건 반영 (직접 수정 {edited}건, 직접 추가 {added}건, 삭제 {deleted}건)")
+    ai_rows = sum(1 for r in rows if r.get("ai"))
+    log(f"확인 표: 추가 신청 {len(df)}건 반영 (AI로 읽음 {ai_rows}건, 직접 수정 {edited}건, 직접 추가 {added}건, "
+        f"삭제 {deleted}건)")
     return output_path
