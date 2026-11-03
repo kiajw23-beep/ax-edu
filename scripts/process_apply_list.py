@@ -74,8 +74,9 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
     whitespace_notes = df.apply(whitespace_note, axis=1)
     added_notes = df["_추가"].apply(added_note)
     df["확인필요"] = [
-        " / ".join(n for n in (ws_note, price_note, dup_note, add_note) if n)
-        for ws_note, price_note, dup_note, add_note in zip(whitespace_notes, price_notes, df["_중복메모"], added_notes)
+        " / ".join(n for n in (ws_note, price_note, dup_note, input_note, add_note) if n)
+        for ws_note, price_note, dup_note, input_note, add_note
+        in zip(whitespace_notes, price_notes, df["_중복메모"], df["_입력메모"], added_notes)
     ]
 
     base_columns = [c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]

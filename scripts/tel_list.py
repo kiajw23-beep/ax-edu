@@ -79,7 +79,7 @@ def run(apply_path: str, general_price_path: str, credit_path: str, output_path:
     for _, r in tel_df.iterrows():
         course = r["신청과정명"]
         course_norm = normalize(course)
-        notes = [r["_중복메모"]] if r["_중복메모"] else []
+        notes = [n for n in (r["_중복메모"], r["_입력메모"]) if n]
 
         price = general_table.get(course_norm)
         tuition = None

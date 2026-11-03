@@ -15,7 +15,7 @@ process_apply_list.py, generate_company_files.py, build_gaegang_sheet.py가
 """
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 from openpyxl.styles import Alignment
@@ -103,6 +103,10 @@ def filter_by_date_range(df: pd.DataFrame, start_date=None, end_date=None):
 
 DUPLICATE_NOTE = "기존 명단에 같은 아이디·과정명 신청이 이미 있음 - 중복 신청 확인필요"
 
+# 칸 맞추기(added_mapping.py)로 만든 추가 신청 파일에만 있는 내부용 칸. 날짜를 읽지 못한 경우 등
+# 입력 단계에서 생긴 확인필요 메모가 들어 있다.
+INPUT_NOTE_COLUMN = "_입력메모"
+
 
 def added_note(is_added: bool) -> str:
     """추가 신청으로 들어온 줄이면 "YYYY-MM-DD 추가 신청" 메모를, 아니면 빈 문자열을 돌려준다."""
@@ -115,6 +119,7 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
     내부용 칸 2개를 붙여서 돌려준다(결과 파일에는 나가지 않음):
     - "_추가": 추가 신청 파일에서 온 줄이면 True
     - "_중복메모": 추가 줄이 원본에 이미 있는 아이디+과정명이면 DUPLICATE_NOTE
+    - "_입력메모": 추가 신청 파일에 INPUT_NOTE_COLUMN 칸이 있으면 그 메모, 없으면 빈 문자열
     필요한 칸이 없으면 ValueError를 발생시킨다(추측해서 넘어가지 않음)."""
     df = pd.read_excel(apply_path)
     missing = [c for c in required_columns if c not in df.columns]
@@ -122,6 +127,7 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
         raise ValueError(f"신청명단 파일에 다음 칸이 없습니다. 원본 파일 형식을 확인해주세요: {missing}")
     df["_추가"] = False
     df["_중복메모"] = ""
+    df["_입력메모"] = ""
     if not added_path:
         return df
 
@@ -133,7 +139,31 @@ def read_apply_list(apply_path, required_columns, added_path=None) -> pd.DataFra
     added["_추가"] = True
     added["_중복메모"] = [DUPLICATE_NOTE if (normalize(i), normalize(c)) in base_keys else ""
                          for i, c in zip(added["아이디"], added["신청과정명"])]
+    added["_입력메모"] = (added.pop(INPUT_NOTE_COLUMN).fillna("").astype(str) if INPUT_NOTE_COLUMN in added.columns
+                       else "")
+    for col in ("교육시작일", "교육종료일"):
+        added[col] = match_date_style(df[col], added[col])
     return pd.concat([df, added], ignore_index=True)
+
+
+# 원본 신청명단의 교육일이 글자로 들어 있을 때 그 모양: 2026-11-02 / 2026.11.02 / 2026/11/02 (+ 00:00:00)
+_DATE_TEXT_PATTERN = re.compile(r"^\d{4}([-./])\d{2}\1\d{2}( 00:00(:00)?)?$")
+
+
+def match_date_style(base: pd.Series, added: pd.Series) -> pd.Series:
+    """추가 신청의 교육일(날짜) 값을 원본 신청명단 교육일과 같은 모양으로 맞춘다.
+    개강내역은 교육일 값 그대로 묶으므로, 같은 날이 날짜 셀과 글자로 섞이면 다른 줄로 나뉘기 때문이다.
+    원본이 글자(예: "2026-11-02")면 추가 신청의 날짜도 같은 모양의 글자로 바꾸고, 원본이 날짜 셀이거나
+    모양을 알 수 없으면 그대로 둔다. 날짜가 아닌 값(날짜로 못 읽은 글자 등)은 건드리지 않는다."""
+    if any(isinstance(v, datetime) for v in base):
+        return added
+    sample = next((str(v).strip() for v in base if isinstance(v, str) and v.strip()), None)
+    match = _DATE_TEXT_PATTERN.match(sample) if sample else None
+    if not match:
+        return added
+    sep = match.group(1)
+    fmt = f"%Y{sep}%m{sep}%d" + (" 00:00:00" if match.group(3) else " 00:00" if match.group(2) else "")
+    return added.map(lambda v: v.strftime(fmt) if isinstance(v, datetime) else v)
 
 
 # 이 회사 신청 건은 1·2·3단계 결과에서 항상 빼고, 필요하면 별도 파일로 만든다(tel_list.py).
@@ -241,6 +271,7 @@ def classify_course(course_name, refund_table: dict, general_table: dict, applic
 
 CURRENCY_FORMAT = "#,##0"
 TEXT_FORMAT = "@"
+DATE_FORMAT = "yyyy-mm-dd"
 _NO_WRAP = Alignment(wrap_text=False)
 
 
@@ -256,6 +287,7 @@ def style_worksheet(ws, currency_columns=(), text_columns=()):
     """엑셀 결과 파일 공통 서식을 적용한다.
     - currency_columns: 천단위 콤마(#,##0)로 표시할 칸 이름들
     - text_columns: 텍스트 서식(@)으로 고정할 칸 이름들(예: 아이디)
+    - 시각이 00:00인 날짜 셀: 날짜만 표시(yyyy-mm-dd). 값은 그대로이고 보이는 모양만 바꾼다
     - 모든 칸: 텍스트 줄바꿈 끄기 + 글자 길이에 맞춰 열 너비 자동 조정
     """
     headers = [c.value for c in ws[1]]
@@ -275,11 +307,19 @@ def style_worksheet(ws, currency_columns=(), text_columns=()):
         for row in range(2, ws.max_row + 1):
             ws.cell(row=row, column=idx).number_format = TEXT_FORMAT
 
+    def is_date_only(value) -> bool:
+        return isinstance(value, datetime) and value.time() == datetime.min.time()
+
     for row in ws.iter_rows():
         for cell in row:
             cell.alignment = _NO_WRAP
+            if is_date_only(cell.value):
+                cell.number_format = DATE_FORMAT
+
+    def shown(value):
+        return value.strftime("%Y-%m-%d") if is_date_only(value) else value
 
     for col_cells in ws.columns:
         letter = col_cells[0].column_letter
-        max_width = max((_display_width(c.value) for c in col_cells if c.value is not None), default=0)
+        max_width = max((_display_width(shown(c.value)) for c in col_cells if c.value is not None), default=0)
         ws.column_dimensions[letter].width = max_width + 2
