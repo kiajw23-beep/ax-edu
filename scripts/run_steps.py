@@ -38,11 +38,12 @@ def run_all(apply_path, refund_path, general_path, credit_path, out_dir, save_te
         r2 = generate_company_files.run(apply_path, refund_path, general_path, out_dir / "2_기업별발송",
                                          start_date=start_date, end_date=end_date)
         for f in r2["files"]:
-            log(f"생성: {f['path']} ({f['count']}명)")
+            log(f"생성: {f['path']} ({f['count']}명)" + (f" - {f['note']}" if f["note"] else ""))
         date_note = f", 선택한 기간 밖 {r2['date_filtered']}건 제외" if r2["date_filtered"] else ""
         log(f"완료: 총 {r2['total']}건 (프리패스/테스트/카드결제 {r2['excluded']}건, "
             f"도쿄일렉트론코리아 {r2['tel_excluded']}건 제외{date_note}) / "
-            f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
+            f"기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건"
+            + (" (발송 파일에는 표시되지 않으니 1번 정리된 신청명단에서 확인)" if r2["flagged"] else ""))
     except Exception:
         log("[오류] 2단계 실패:\n" + traceback.format_exc())
 

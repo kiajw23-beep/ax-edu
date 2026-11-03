@@ -1138,6 +1138,11 @@
         if (!res.ok) throw new Error(`${name}.py 를 불러오지 못했습니다 (${res.status})`);
         pyodide.FS.writeFile(`/app/${name}.py`, await res.text());
       }
+      // 기업별 발송 파일 서식(scripts/generate_company_files.py가 /app의 한 단계 위 templates/에서 찾음)
+      const templateRes = await fetch("../templates/company_file_template.xlsx", { cache: "no-cache" });
+      if (!templateRes.ok) throw new Error(`기업별 발송 서식 파일을 불러오지 못했습니다 (${templateRes.status})`);
+      pyodide.FS.mkdirTree("/templates");
+      pyodide.FS.writeFile("/templates/company_file_template.xlsx", new Uint8Array(await templateRes.arrayBuffer()));
       pyodide.runPython("import sys\nsys.path.insert(0, '/app')");
       const [all, required] = pyToJs(pyodide.runPython(
         "import added_mapping\n[added_mapping.REQUIRED_COLUMNS, added_mapping.REQUIRED_FOR_ADDED]"));

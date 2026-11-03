@@ -29,7 +29,7 @@
 exe로 만드는 법(윈도우 PC에서):
     pip install -r requirements.txt pyinstaller
     pyinstaller --onefile --windowed --name 월별개강업무도구 ^
-        --add-data "scripts/webview_ui;webview_ui" scripts/webview_app.py
+        --add-data "scripts/webview_ui;webview_ui" --add-data "templates;templates" scripts/webview_app.py
 결과물은 dist/월별개강업무도구.exe 에 생성된다.
 """
 import json
