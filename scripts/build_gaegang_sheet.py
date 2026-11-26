@@ -93,7 +93,7 @@ def run(apply_path: str, refund_curriculum_path: str, general_price_path: str, o
             "단가": result["수강료"],
             "1인정부지원금": result["정부지원금"],
             "1인기업부담금": result["기업부담금"],
-            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"]) if n),
+            "확인필요": " / ".join(n for n in (result["확인필요"], r["_중복메모"], r["_입력메모"]) if n),
         })
     per_student_df = pd.DataFrame(per_student)
 

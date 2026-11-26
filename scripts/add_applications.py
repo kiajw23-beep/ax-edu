@@ -50,8 +50,9 @@ def run(apply_path, added_path, refund_path, general_path, existing_gaegang_path
                                         out_dir / f"2_기업별발송_추가_{stamp}", added_path,
                                         start_date, end_date)
         for f in r2["files"]:
-            log(f"생성: {f['path']} ({f['count']}명)")
-        log(f"완료: 기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건")
+            log(f"생성: {f['path']} ({f['count']}명)" + (f" - {f['note']}" if f["note"] else ""))
+        log(f"완료: 기업 {r2['company_count']}곳 / 확인필요 {r2['flagged']}건"
+            + (" (발송 파일에는 표시되지 않으니 1번 정리된 신청명단에서 확인)" if r2["flagged"] else ""))
     except Exception:
         log("[오류] 기업별 발송 실패:\n" + traceback.format_exc())
 
