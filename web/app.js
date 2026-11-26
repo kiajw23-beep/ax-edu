@@ -28,44 +28,73 @@
   let pyodide = null;
 
   // ----- 최근 파일 이력 (IndexedDB, 칸마다 따로, 파일 핸들만 저장하고 내용은 저장하지 않음) -----
+  // 브라우저 저장소가 응답하지 않아도 파일 선택이 멈추지 않도록, 이력 읽기·쓰기는 시간 제한을 두고
+  // 실패하면 이력 없이 계속한다(처리 결과 칸에 한 번만 알림).
+  const RECENT_TIMEOUT_MS = 3000;
+  let recentFailureNoted = false;
+
+  function withTimeout(promise, ms) {
+    return Promise.race([promise, new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`브라우저 저장소가 ${ms / 1000}초 안에 응답하지 않음`)), ms);
+    })]);
+  }
+
+  function noteRecentFailure(e) {
+    console.warn("최근 파일 이력 오류:", e);
+    if (recentFailureNoted) return;
+    recentFailureNoted = true;
+    appendLog(`[알림] 최근 파일 이력을 저장·불러오지 못했습니다(작업에는 지장 없음): ${e && e.message ? e.message : e}`);
+  }
+
   function openDb() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open("월별개강업무도구", 1);
       req.onupgradeneeded = () => req.result.createObjectStore("recent");
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error("다른 탭이 브라우저 저장소를 쓰고 있음"));
+    });
+  }
+
+  async function readRecentFiles(slot) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction("recent").objectStore("recent").get(slot);
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
     });
   }
 
   async function getRecentFiles(slot) {
     try {
-      const db = await openDb();
-      return await new Promise((resolve, reject) => {
-        const req = db.transaction("recent").objectStore("recent").get(slot);
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      });
+      return await withTimeout(readRecentFiles(slot), RECENT_TIMEOUT_MS);
     } catch (e) {
+      noteRecentFailure(e);
       return [];
     }
   }
 
+  async function writeRecentFile(slot, handle) {
+    const kept = [];
+    for (const h of await readRecentFiles(slot)) {
+      if (!(await h.isSameEntry(handle))) kept.push(h);
+    }
+    const handles = [handle, ...kept].slice(0, MAX_RECENT_FILES);
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("recent", "readwrite");
+      tx.objectStore("recent").put(handles, slot);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("저장이 취소됨"));
+    });
+  }
+
   async function rememberRecentFile(slot, handle) {
     try {
-      const kept = [];
-      for (const h of await getRecentFiles(slot)) {
-        if (!(await h.isSameEntry(handle))) kept.push(h);
-      }
-      const handles = [handle, ...kept].slice(0, MAX_RECENT_FILES);
-      const db = await openDb();
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction("recent", "readwrite");
-        tx.objectStore("recent").put(handles, slot);
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      });
+      await withTimeout(writeRecentFile(slot, handle), RECENT_TIMEOUT_MS);
     } catch (e) {
-      // 이력 저장 실패는 작업에 영향이 없으므로 무시한다.
+      noteRecentFailure(e);
     }
   }
 
@@ -112,8 +141,8 @@
           showModal("알려드립니다", `파일을 열 수 없습니다. 옮겨졌거나 지워졌을 수 있습니다.\n${handle.name}`);
           return;
         }
-        await rememberRecentFile(slot, handle);
         setFieldValue(slot, handle);
+        rememberRecentFile(slot, handle); // 기다리지 않음: 이력 저장이 늦어도 파일 선택은 바로 반영
       });
       recentMenu.appendChild(item);
     });
@@ -141,8 +170,8 @@
           + `오류: ${e && e.name ? e.name : ""} ${e && e.message ? e.message : e}`);
         return;
       }
-      await rememberRecentFile(slot, handles[0]);
       setFieldValue(slot, handles[0]);
+      rememberRecentFile(slot, handles[0]); // 기다리지 않음: 이력 저장이 늦어도 파일 선택은 바로 반영
     });
 
     recentBtn.addEventListener("click", async (ev) => {
