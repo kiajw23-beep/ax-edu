@@ -133,7 +133,13 @@
       try {
         handles = await window.showOpenFilePicker({ types: FILE_TYPES });
       } catch (e) {
-        return; // 취소
+        if (e && e.name === "AbortError") return; // 사용자가 창을 닫음(취소)
+        // 브라우저·회사 보안 정책 등으로 파일 선택 창이 막힌 경우: 조용히 넘어가지 말고 이유를 보여 준다.
+        showModal("알려드립니다", "파일 선택 창을 열지 못했습니다.\n"
+          + "Chrome·Edge 최신 버전인지, 주소창이 http://localhost:8000/web/ 처럼 localhost로 시작하는지 확인해주세요. "
+          + "회사 보안 정책으로 파일 접근이 막혀 있을 수도 있습니다.\n\n"
+          + `오류: ${e && e.name ? e.name : ""} ${e && e.message ? e.message : e}`);
+        return;
       }
       await rememberRecentFile(slot, handles[0]);
       setFieldValue(slot, handles[0]);
@@ -1155,6 +1161,13 @@
       appendLog("[오류] 처리 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해주세요.\n" + e);
     }
   }
+
+  // 예상하지 못한 오류도 "처리 결과" 칸에 남겨, 문제가 생겼을 때 원인을 알 수 있게 한다.
+  window.addEventListener("error", (ev) => appendLog(`[오류] ${ev.message}`));
+  window.addEventListener("unhandledrejection", (ev) => {
+    const r = ev.reason;
+    appendLog(`[오류] ${r && r.name ? r.name + ": " : ""}${r && r.message ? r.message : r}`);
+  });
 
   init();
 })();
