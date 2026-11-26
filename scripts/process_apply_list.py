@@ -23,10 +23,16 @@ REQUIRED_COLUMNS = [
     "교육시작일", "교육종료일", "신청일시", "결제수단", "결제일", "결제금액", "결제상태", "신청상태",
 ]
 
-# 정리된 신청명단에는 필요 없어서 결과 파일에서 빼는 칸
-DROP_FROM_OUTPUT = ["신청ID", "출처", "회사명", "지사구분", "결제수단", "결제일", "결제금액", "결제상태"]
 
 WHITESPACE_CHECK_COLUMNS = ["성함", "아이디", "휴대전화", "메일주소"]
+
+# 정리된 신청명단의 칸 순서. 최종신청유형·실시회차는 원본에 없는 정보라 비워 두고 사용자가 채운다.
+OUTPUT_COLUMNS = [
+    "순번", "구분", "최종신청유형", "기업명", "교육시작일", "교육종료일", "실시회차", "산인공코드", "신청과정명",
+    "성함", "아이디", "생년월일", "휴대전화", "메일주소", "신청일시", "신청상태",
+    "환급구분", "수강료", "정부지원금", "기업부담금", "확인필요",
+]
+BLANK_COLUMNS = ["최종신청유형", "실시회차"]
 
 
 def has_whitespace_issue(value) -> bool:
@@ -79,10 +85,9 @@ def run(apply_list_path: str, refund_curriculum_path: str, general_price_path: s
         in zip(whitespace_notes, price_notes, df["_중복메모"], df["_입력메모"], added_notes)
     ]
 
-    base_columns = [c for c in REQUIRED_COLUMNS if c not in DROP_FROM_OUTPUT]
-    insert_at = base_columns.index("구분") + 1
-    ordered_columns = (base_columns[:insert_at] + ["기업명"] + base_columns[insert_at:]
-                        + ["환급구분", "수강료", "정부지원금", "기업부담금", "확인필요"])
+    for col in BLANK_COLUMNS:
+        df[col] = None
+    ordered_columns = OUTPUT_COLUMNS
     added_count = int(df["_추가"].sum())
     duplicate_count = int((df["_중복메모"] != "").sum())
     df = df[ordered_columns]
